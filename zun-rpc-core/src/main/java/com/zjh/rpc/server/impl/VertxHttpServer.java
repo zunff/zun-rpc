@@ -1,15 +1,22 @@
 package com.zjh.rpc.server.impl;
 
+import com.zjh.rpc.RpcApplication;
 import com.zjh.rpc.server.HttpServer;
 import com.zjh.rpc.server.handler.VertxHttpServerHandler;
 import io.vertx.core.Vertx;
 
 /**
  * VertxHttp服务器
+ *
+ * @author zunf
+ * @date 2024/5/6 09:21
  */
 public class VertxHttpServer implements HttpServer {
     @Override
     public void doStart(int port) {
+        //初始化RPC框架，读取配置文件
+        RpcApplication.init();
+
         //创建 Vert.x 实例
         Vertx vertx = Vertx.vertx();
 

@@ -2,16 +2,21 @@ package com.zjh.rpc.proxy;
 
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
+import com.zjh.rpc.RpcApplication;
+import com.zjh.rpc.config.RpcConsumerConfig;
 import com.zjh.rpc.model.RpcRequest;
 import com.zjh.rpc.model.RpcResponse;
 import com.zjh.rpc.serializer.Serializer;
-import com.zjh.rpc.serializer.impl.JDKSerializer;
+import com.zjh.rpc.serializer.impl.JdkSerializer;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 
 /**
  * 服务代理（JDK 动态代理）
+ *
+ * @author zunf
+ * @date 2024/5/6 09:25
  */
 public class ServiceProxy implements InvocationHandler {
 
@@ -19,7 +24,9 @@ public class ServiceProxy implements InvocationHandler {
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
 
-        Serializer serializer = new JDKSerializer();
+        RpcConsumerConfig rpcConsumerConfig = RpcApplication.getRpcConsumerConfig();
+
+        Serializer serializer = new JdkSerializer();
 
         //构造请求参数
         RpcRequest request = RpcRequest.builder()
@@ -31,9 +38,12 @@ public class ServiceProxy implements InvocationHandler {
 
         try {
             byte[] bytes = serializer.serialize(request);
+            //拼接消费者服务URL
+            StringBuilder sb = new StringBuilder();
+            sb.append(rpcConsumerConfig.getServerHost()).append(":").append(rpcConsumerConfig.getServerPort());
             //发送请求
             try (HttpResponse httpResponse = HttpRequest
-                    .post("http://localhost:8088")
+                    .post(sb.toString())
                     .body(bytes).execute()){
 
                 //处理接口执行结果并返回

@@ -10,15 +10,12 @@ public class ProviderMain {
 
     public static void main(String[] args) {
 
-        //初始化RPC框架，读取配置文件
-        RpcApplication.init();
-
         //服务启动时将服务注册到注册器中
         LocalRegistry.register(UserService.class.getName(), UserServiceImpl.class);
 
         VertxHttpServer vertxHttpServer = new VertxHttpServer();
 
-        vertxHttpServer.doStart(RpcApplication.getRpcConfig().getServerPort());
+        vertxHttpServer.doStart(RpcApplication.getRpcProviderConfig().getServerPort());
 
     }
 

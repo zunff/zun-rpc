@@ -6,7 +6,12 @@ package com.zjh.rpc.constants;
 public interface RpcConstants {
 
     /**
-     * 配置文件加载前缀
+     * 服务提供者，配置文件加载前缀
      */
-    String CONFIG_PREFIX = "rpc";
+    String PROVIDER_CONFIG_PREFIX = "rpc.provider";
+
+    /**
+     * 服务消费者，配置文件加载前缀
+     */
+    String CONSUMER_CONFIG_PREFIX = "rpc.consumer";
 }

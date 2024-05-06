@@ -4,7 +4,7 @@ import com.zjh.rpc.model.RpcRequest;
 import com.zjh.rpc.model.RpcResponse;
 import com.zjh.rpc.registry.LocalRegistry;
 import com.zjh.rpc.serializer.Serializer;
-import com.zjh.rpc.serializer.impl.JDKSerializer;
+import com.zjh.rpc.serializer.impl.JdkSerializer;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServerRequest;
@@ -15,6 +15,9 @@ import java.lang.reflect.Method;
 
 /**
  * Vertx 请求处理器
+ *
+ * @author zunf
+ * @date 2024/5/6 09:29
  */
 public class VertxHttpServerHandler implements Handler<HttpServerRequest> {
 
@@ -25,7 +28,7 @@ public class VertxHttpServerHandler implements Handler<HttpServerRequest> {
         System.out.println("Received request: " + request.method() + " " + request.uri());
 
         //创建序列化器
-        Serializer serializer = new JDKSerializer();
+        Serializer serializer = new JdkSerializer();
 
         //异步处理 Http 请求
         request.bodyHandler(body -> {

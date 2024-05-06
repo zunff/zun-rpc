@@ -5,6 +5,9 @@ import cn.hutool.setting.dialect.Props;
 
 /**
  * RPC配置工具类
+ *
+ * @author zunf
+ * @date 2024/5/6 09:58
  */
 public class ConfigUtils {
 

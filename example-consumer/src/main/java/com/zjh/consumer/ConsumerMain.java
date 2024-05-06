@@ -2,11 +2,14 @@ package com.zjh.consumer;
 
 import com.zjh.common.model.User;
 import com.zjh.common.service.UserService;
-import com.zjh.rpc.RpcApplication;
-import com.zjh.rpc.config.RpcConfig;
 import com.zjh.rpc.proxy.factory.ServiceProxyFactory;
-import com.zjh.rpc.utils.ConfigUtils;
 
+/**
+ * 消费者
+ *
+ * @author zunf
+ * @date 2024/5/6 01:02
+ */
 public class ConsumerMain {
     public static void main(String[] args) {
 
