@@ -2,16 +2,15 @@ package com.zjh.rpc.constants;
 
 /**
  * RPC常量
+ *
+ * @author zunf
+ * @date 2024/5/7 11:15
  */
 public interface RpcConstants {
 
     /**
-     * 服务提供者，配置文件加载前缀
+     * 配置文件加载前缀
      */
-    String PROVIDER_CONFIG_PREFIX = "rpc.provider";
+    String CONFIG_PREFIX = "rpc";
 
-    /**
-     * 服务消费者，配置文件加载前缀
-     */
-    String CONSUMER_CONFIG_PREFIX = "rpc.consumer";
 }

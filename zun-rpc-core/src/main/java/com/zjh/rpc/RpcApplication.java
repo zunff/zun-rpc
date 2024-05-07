@@ -1,7 +1,6 @@
 package com.zjh.rpc;
 
-import com.zjh.rpc.config.RpcConsumerConfig;
-import com.zjh.rpc.config.RpcProviderConfig;
+import com.zjh.rpc.config.RpcConfig;
 import com.zjh.rpc.constants.RpcConstants;
 import com.zjh.rpc.utils.ConfigUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -16,83 +15,52 @@ import lombok.extern.slf4j.Slf4j;
 public class RpcApplication {
 
     /**
-     * RPC服务端配置对象，使用单例模式
+     * RPC配置对象，使用单例模式
      */
-    private static volatile RpcProviderConfig rpcProviderConfig;
+    private static volatile RpcConfig rpcConfig;
 
     /**
-     * RPC消费者配置对象，使用单例模式
-     */
-    private static volatile RpcConsumerConfig rpcConsumerConfig;
-
-    /**
-     * 无参初始化RpcProviderConfig
+     * 无参初始化RpcConfig
      */
     public static void init() {
 
-        RpcProviderConfig newRpcProviderConfig;
+        RpcConfig newConfig;
         //读取配置对象
         try {
-            newRpcProviderConfig = ConfigUtils.loadConfig(RpcProviderConfig.class, RpcConstants.PROVIDER_CONFIG_PREFIX);
+            newConfig = ConfigUtils.loadConfig(RpcConfig.class, RpcConstants.CONFIG_PREFIX);
         } catch (Exception e) {
             //配置初始化失败，使用默认值
-            newRpcProviderConfig = new RpcProviderConfig();
-            log.error("rpc provider init config error, using default config");
+            newConfig = new RpcConfig();
+            log.error("rpc init config error, using default config");
         }
         //存储配置对象
-        init(newRpcProviderConfig);
+        init(newConfig);
     }
 
     /**
-     * 有参初始化RpcProviderConfig
+     * 有参初始化RpcConfig
      *
-     * @param newRpcProviderConfig 需要存储的RpcProviderConfig对象
+     * @param newRpcConfig 需要存储的RpcConfig对象
      */
-    public static void init(RpcProviderConfig newRpcProviderConfig) {
-        rpcProviderConfig = newRpcProviderConfig;
-        log.info("rpc provider init config = {}", newRpcProviderConfig.toString());
+    public static void init(RpcConfig newRpcConfig) {
+        rpcConfig = newRpcConfig;
+        log.info("rpc init config = {}", newRpcConfig.toString());
     }
 
     /**
-     * 获取RpcProviderConfig，使用双检锁机制，实现单例模式
+     * 获取RpcConfig，使用双检锁机制，实现单例模式
      *
-     * @return 从.properties文件中读取到的RpcProviderConfig对象
+     * @return 从.properties文件中读取到的RpcConfig对象
      */
-    public static RpcProviderConfig getRpcProviderConfig() {
-        if (rpcProviderConfig == null) {
+    public static RpcConfig getRpcConfig() {
+        if (rpcConfig == null) {
             synchronized (RpcApplication.class) {
-                if (rpcProviderConfig == null) {
+                if (rpcConfig == null) {
                     init();
                 }
             }
         }
-        return rpcProviderConfig;
+        return rpcConfig;
     }
-
-    /**
-     * 获取RpcConsumerConfig，使用双检锁机制，实现单例模式
-     *
-     * @return 从.properties文件中读取到的RpcConsumerConfig对象
-     */
-    public static RpcConsumerConfig getRpcConsumerConfig() {
-        if (rpcConsumerConfig == null) {
-            synchronized (RpcApplication.class) {
-                if (rpcConsumerConfig == null) {
-                    RpcConsumerConfig newRpcConsumerConfig;
-                    //读取配置对象
-                    try {
-                        newRpcConsumerConfig = ConfigUtils.loadConfig(RpcConsumerConfig.class, RpcConstants.CONSUMER_CONFIG_PREFIX);
-                    } catch (Exception e) {
-                        //配置初始化失败，使用默认值
-                        newRpcConsumerConfig = new RpcConsumerConfig();
-                        log.error("rpc consumer init config error, using default config");
-                    }
-                    rpcConsumerConfig = newRpcConsumerConfig;
-                    log.info("rpc consumer init config = {}", newRpcConsumerConfig.toString());
-                }
-            }
-        }
-        return rpcConsumerConfig;
-    } 
 }
 

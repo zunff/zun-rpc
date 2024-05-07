@@ -23,12 +23,6 @@
             <artifactId>example-common</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
-
-        <dependency>
-            <groupId>com.zjh</groupId>
-            <artifactId>zun-rpc-core</artifactId>
-            <version>1.0-SNAPSHOT</version>
-        </dependency>
     </dependencies>
 
     <build>

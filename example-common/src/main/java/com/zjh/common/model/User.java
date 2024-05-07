@@ -7,6 +7,12 @@ import lombok.ToString;
 
 import java.io.Serializable;
 
+/**
+ * 用户实体类
+ *
+ * @author zunf
+ * @date 2024/5/6 15:54
+ */
 @Data
 @ToString
 @AllArgsConstructor
@@ -17,6 +23,11 @@ public class User implements Serializable {
      * 用户名
      */
     private String name;
+
+    /**
+     * 性别
+     */
+    private Integer age;
 
     private static final long serialVersionUID = 1L;
 }

@@ -231,6 +231,49 @@ public class PropertiesDemo {
 ```
 2. 利用第三方工具类，例如Hutools的Props，这种封装过的工具类会更加方便
 3. 想要读取.yaml文件，Properties是不行的，得引入第三方工具类
+4. 项目中的配置，分为通用、consumer、provider 三个部分
+
+```java
+public class RpcConfig {
+
+    //consumer、provider 通用配置 begin
+
+    /**
+     * 服务提供者监听端口
+     */
+    private int serverPort = 8088;
+
+    /**
+     * 序列化器
+     */
+    private String serializer = "jdk";
+
+    //end
+
+
+    //consumer begin
+
+    /**
+     * 服务提供者地址
+     */
+    private String serverHost = "http://localhost";
+
+    /**
+     * 是否使用模拟数据
+     */
+    private boolean isMock = false;
+
+    //end
+
+
+    //provider begin
+
+    //end
+}
+
+```
+
+
 
 ## 四、创建Mock数据
 - 也就是模拟数据，当服务提供端并没有搭建好时，服务消费者想要跑通流程，就需要要用到Mock数据，用来模拟服务提供端的行为
@@ -335,6 +378,156 @@ public class MockServiceProxy implements InvocationHandler {
 
 
 
+#### 5.1.1 Json序列化器
+
+需要解决一个问题：RpcResponse的data属性为Object类型，RpcRequest的params为Object类型。**在反序列化时，Object类型和泛型的类型都会被擦除**，也就导致jackson不知道把它反序列化成什么类型的变量，导致最后反序列化的结果是LinkedHashMap类型，所以如果想要正常得显示Object类型，需要保存原来的类型，并在反序列化时，反序列化成原来所希望的类型，而不是LinkedHashMap。
+
+BUG：
+
+![截屏2024-05-06 16.03.51](./img/截屏2024-05-06 16.03.51.png)
+
+期待：
+
+![截屏2024-05-06 16.24.36](./img/截屏2024-05-06 16.24.36.png)
+
+```java
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zjh.rpc.model.RpcRequest;
+import com.zjh.rpc.model.RpcResponse;
+import com.zjh.rpc.serializer.Serializer;
+import java.io.IOException;
+
+public class JsonSerializer implements Serializer {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    @Override
+    public <T> byte[] serialize(T object) throws IOException {
+        return OBJECT_MAPPER.writeValueAsBytes(object);
+    }
+
+    @Override
+    public <T> T deserialize(byte[] bytes, Class<T> type) throws IOException {
+        T t = OBJECT_MAPPER.readValue(bytes, type);
+        //RpcResponse的data属性为Object类型，RpcRequest的params为Object类型
+        //在反序列化时，Object类型和泛型的类型都会被擦除，也就导致jackson不知道把它反序列化成什么类型的变量
+        //导致最后反序列化的结果是LinkedHashMap类型
+        //所以如果想要正常得显示Object类型，需要保存原来的类型，并在反序列化时，反序列化成原来所希望的类型，而不是LinkedHashMap
+        handleTypeError(t);
+        return t;
+    }
+
+    /**
+     * 处理RpcResponse的data、RpcRequest的params属性，被反序列化为LinkedHashMap的错误
+     *
+     * @param t   RpcResponse或RpcRequest对象
+     * @param <T> RpcResponse或RpcRequest类
+     * @throws IOException IO异常
+     */
+    private <T> void handleTypeError(T t) throws IOException {
+        if (t instanceof RpcRequest) {
+            RpcRequest rpcRequest = (RpcRequest) t;
+            Class<?>[] paramTypes = rpcRequest.getParamTypes();
+            Object[] params = rpcRequest.getParams();
+            for (int i = 0; i < params.length; i++) {
+                //如果类型不同，重新处理类型
+                if (!params[i].getClass().equals(paramTypes[i])) {
+                    byte[] bytes = OBJECT_MAPPER.writeValueAsBytes(params[i]);
+                    params[i] = OBJECT_MAPPER.readValue(bytes, paramTypes[i]);
+                }
+            }
+        } else if (t instanceof RpcResponse) {
+            RpcResponse rpcResponse = (RpcResponse) t;
+            Object data = rpcResponse.getData();
+            Class<?> dataType = rpcResponse.getDataType();
+            //如果类型不同，重新处理类型
+            if (!data.getClass().equals(dataType)) {
+                byte[] bytes = OBJECT_MAPPER.writeValueAsBytes(data);
+                rpcResponse.setData(OBJECT_MAPPER.readValue(bytes, dataType));
+            }
+        }
+    }
+}
+
+```
+
+#### 5.1.2 Hessian序列化器
+
+```java
+import com.caucho.hessian.io.HessianInput;
+import com.caucho.hessian.io.HessianOutput;
+import com.zjh.rpc.serializer.Serializer;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
+public class HessianSerializer implements Serializer {
+    @Override
+    public <T> byte[] serialize(T object) throws IOException {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        HessianOutput ho = new HessianOutput(bos);
+        ho.writeObject(object);
+        return bos.toByteArray();
+    }
+
+    @Override
+    public <T> T deserialize(byte[] bytes, Class<T> type) throws IOException {
+        ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
+        HessianInput hi = new HessianInput(bis);
+        return (T) hi.readObject(type);
+    }
+}
+
+```
+
+#### 5.1.3 Kryo 序列化器
+
+```java
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import com.zjh.rpc.serializer.Serializer;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
+public class KryoSerializer implements Serializer {
+
+    /**
+     * kryo线程不安全，使用ThreadLocal保证每一个线程只有一个kryo
+     */
+    private static final ThreadLocal<Kryo> KRYO_THREAD_LOCAL = ThreadLocal.withInitial(() -> {
+        Kryo kryo = new Kryo();
+        //设置动态注册序列化和反序列化类，不提前注册所有类（可能有安全问题）
+        kryo.setRegistrationRequired(false);
+        return kryo;
+    });
+
+    @Override
+    public <T> byte[] serialize(T object) throws IOException {
+        Kryo kryo = KRYO_THREAD_LOCAL.get();
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        Output output = new Output(bos);
+        kryo.writeObject(output, object);
+        output.close();
+        return bos.toByteArray();
+    }
+
+    @Override
+    public <T> T deserialize(byte[] bytes, Class<T> type) throws IOException {
+        Kryo kryo = KRYO_THREAD_LOCAL.get();
+        ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
+        Input input = new Input(bis);
+        T t = kryo.readObject(input, type);
+        input.close();
+        return t;
+    }
+}
+
+```
+
+
+
 ### 5.2 SPI机制
 
 SPI（Service Provider Inteface）服务提供者接口，主要用于实现模块化开发和插件化扩展。
@@ -365,6 +558,137 @@ for (Serializer service : serviceLoader) {
 ```
 
 #### 5.2.2 自定义实现SPI机制
+
+考虑到系统提供的SPI接口不能让用户在配置文件中通过配置选择使用哪个序列化器，所以自定义实现一个可以通过key=>value中的key来选择不同的序列化器全类名value的SPI机制。
+
+1）系统提供的序列化器文件存储在 `resource/META-INF/rpc/system` 目录下；用户自定义的存储在 `resource/META-INF/rpc/custom` 目录下。如果 system 与 custom 中出现key冲突，保留custom中的配置。
+
+2）`resource/META-INF/rpc/system`放在rpm-core项目中， `resource/META-INF/rpc/custom` 存放在用户自己的项目目录中，因为消费者和提供者都需要使用这个序列化器，所以建议将文件放在双方都依赖的common项目中。
+
+![image-20240507115217580](./img/image-20240507115217580.png) 
+
+ 3）自定义SPI加载器：
+
+```java
+import cn.hutool.core.io.resource.ResourceUtil;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * SPI 服务加载器
+ *
+ * @author zunf
+ * @date 2024/5/7 09:41
+ */
+public class SpiLoader {
+
+    /**
+     * 扫描路径
+     */
+    private static final String[] SCAN_DIRS = new String[]{"META-INF/rpc/system/", "META-INF/rpc/custom/"};
+
+    /**
+     * 已加载的全类名。接口全类名 => (key => 接口实现类全类名)
+     */
+    private static final Map<String, Map<String, Class<?>>> LOAD_CLASS_MAP = new ConcurrentHashMap<>();
+
+    /**
+     * 服务对象缓存。全类名 => 类对象实例
+     */
+    private static final Map<String, Object> SPI_OBJECT_MAP = new ConcurrentHashMap<>();
+
+
+    /**
+     * 加载 META-INF/rpc/system、custom 下的类路径，custom定义的类优先级高，可覆盖system中的设置
+     *
+     * @param loadClass 需要加载的接口
+     */
+    public static void load(Class<?> loadClass) {
+        //全类名所对应注册的实现类map
+        Map<String, Class<?>> keyClassMap = new HashMap<>();
+
+        for (String scanDir : SCAN_DIRS) {
+            //扫描 system、custom 下的接口全类名文件
+            List<URL> resources = ResourceUtil.getResources(scanDir + loadClass.getName());
+            for (URL resource : resources) {
+                try {
+                    InputStreamReader inputStreamReader = new InputStreamReader(resource.openStream());
+                    BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
+                    String line;
+                    while ((line = bufferedReader.readLine()) != null) {
+                        String[] split = line.split("=");
+                        if (split.length == 2) {
+                            String key = split[0];
+                            String className = split[1];
+                            keyClassMap.put(key, Class.forName(className));
+                        }
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+        //缓存到全局对象中
+        LOAD_CLASS_MAP.put(loadClass.getName(), keyClassMap);
+    }
+
+
+    public static <T> T getSpiObject(Class<T> clazz, String key) {
+        Map<String, Class<?>> keyClassMap = LOAD_CLASS_MAP.get(clazz.getName());
+        if (keyClassMap == null || !keyClassMap.containsKey(key)) {
+            throw new RuntimeException(String.format("SpiLoad 不存在 %s => %s", clazz.getName(), key));
+        }
+        //获取要加载的类型
+        Class<?> aClass = keyClassMap.get(key);
+        //从对象缓存中获取对象
+        if (!SPI_OBJECT_MAP.containsKey(aClass.getName())) {
+            synchronized (SPI_OBJECT_MAP) {
+                if (!SPI_OBJECT_MAP.containsKey(aClass.getName())) {
+                    try {
+                        SPI_OBJECT_MAP.put(aClass.getName(), aClass.newInstance());
+                    } catch (Exception e) {
+                        throw new RuntimeException(String.format("%s 类实例化失败", aClass.getName()), e);
+                    }
+                }
+            }
+        }
+        return (T) SPI_OBJECT_MAP.get(aClass.getName());
+    }
+}
+
+```
+
+4）序列化器工厂
+
+```java
+import com.zjh.rpc.serializer.Serializer;
+import com.zjh.rpc.spi.SpiLoader;
+
+/**
+ * 序列化器工厂
+ *
+ * @author zunf
+ * @date 2024/5/7 10:46
+ */
+public class SerializerFactory {
+
+    static {
+        SpiLoader.load(Serializer.class);
+    }
+
+    public static Serializer getInstance(String key) {
+        return SpiLoader.getSpiObject(Serializer.class, key);
+    }
+
+}
+```
+
+
 
 
 

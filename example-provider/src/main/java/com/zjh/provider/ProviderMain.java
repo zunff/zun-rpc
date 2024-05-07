@@ -6,16 +6,25 @@ import com.zjh.rpc.RpcApplication;
 import com.zjh.rpc.registry.LocalRegistry;
 import com.zjh.rpc.server.impl.VertxHttpServer;
 
+/**
+ * 提供者
+ *
+ * @author zunf
+ * @date 2024/5/7 11:28
+ */
 public class ProviderMain {
 
     public static void main(String[] args) {
+
+        //初始化RPC框架，读取配置文件
+        RpcApplication.init();
 
         //服务启动时将服务注册到注册器中
         LocalRegistry.register(UserService.class.getName(), UserServiceImpl.class);
 
         VertxHttpServer vertxHttpServer = new VertxHttpServer();
 
-        vertxHttpServer.doStart(RpcApplication.getRpcProviderConfig().getServerPort());
+        vertxHttpServer.doStart(RpcApplication.getRpcConfig().getServerPort());
 
     }
 
