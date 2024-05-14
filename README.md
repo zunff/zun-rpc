@@ -690,5 +690,500 @@ public class SerializerFactory {
 
 
 
+## 六、注册中心
+
+### 6.1 需求分析
+
+![image-20240509165305118](./img/image-20240509165305118.png) 
+
+在图中，我们可以看到，注册中心的作用是存储已注册的Service的元信息，例如访问地址、端口、版本号。并以一个唯一标识符号作为key，方便消费者拿到这个Service的元信息。
+
+
+
+### 6.2 设计方案
+
+注册中心的几个实现关键（核心能力）：
+
+1. 数据分布式存储：集中的注册信息数据存储、读取和共享
+2. 服务注册：服务提供者上报服务信息到注册中心
+3. 服务发现：服务消费者从注册中心拉取服务信息
+4. 心跳检测：定期检查服务提供者的存活状态
+5. 服务注销：手动剔除节点、或者自动剔除失效节点
+6. 优化点：比如注册中心本身的容错、服务消费者缓存等。
+
+
+
+技术选型：
+
+主流的存储读取中间价有：Zookeeper、Redis，但此项目中会使用一个新颖的、更适合存储元信息的中间件 -- Etcd 来实现注册中心。
+
+
+
+选择的原因：
+
+1. go语言开发，并发性能高
+2. 采用Raft一致性算法来保证数据的一致性
+3. 提供了简单的API、数据过期机制、数据监听和通知机制，完美符合注册中心。
+
+
+
+数据结构设计：
+
+Etcd中也是采取的K-V存储，并且key类似于文件系统中的文件名，可以实现类似于路径的分层结构。
+
+Key：/rpc/Service全类名/版本号/localhost:8080
+
+Value: {服务元数据 JsonStr}
+
+
+
+### 6.3 开发实现
+
+#### 6.3.1 注册中心实现
+
+注册中心也与序列化器一样，支持SPI机制，动态切换注册中心，直接复用SpiLoader类即可。
+
+```java
+public class RegistryFactory {
+    static {
+        SpiLoader.load(Registry.class);
+    }
+
+    public static Registry getInstance(String key) {
+        return SpiLoader.getSpiObject(Registry.class, key);
+    }
+}
+```
+
+Etcd的注册中心实现：
+
+```java
+public class EtcdRegistry implements Registry {
+
+    private Client client = null;
+
+    private KV kvClient = null;
+
+    public static final String ETCD_ROOT_PATH = "/rpc/";
+
+    @Override
+    public void init(RegistryConfig registryConfig) {
+
+        client = Client.builder()
+                .endpoints(registryConfig.getAddress())
+                .connectTimeout(Duration.ofMillis(registryConfig.getTimeout())).build();
+
+        kvClient = client.getKVClient();
+    }
+
+    @Override
+    public void register(ServiceMetaInfo serviceMetaInfo) throws Exception {
+        //创建租借客户端，用来设置k-v时限
+        Lease leaseClient = client.getLeaseClient();
+        // 30s 的租约
+        long leaseId = leaseClient.grant(30).get().getID();
+        //设置键值对
+        String registryKey = ETCD_ROOT_PATH + serviceMetaInfo.getServiceNodeKey();
+        ByteSequence key = ByteSequence.from(registryKey, StandardCharsets.UTF_8);
+        ByteSequence value = ByteSequence.from(JSONUtil.toJsonStr(serviceMetaInfo), StandardCharsets.UTF_8);
+
+        PutOption putOption = PutOption.builder().withLeaseId(leaseId).build();
+        kvClient.put(key, value, putOption).get();
+    }
+
+    @Override
+    public void unregister(ServiceMetaInfo serviceMetaInfo) throws Exception {
+        String registryKey = ETCD_ROOT_PATH + serviceMetaInfo.getServiceNodeKey();
+        ByteSequence key = ByteSequence.from(registryKey, StandardCharsets.UTF_8);
+        kvClient.delete(key).get();
+    }
+
+    @Override
+    public List<ServiceMetaInfo> discover(String serviceKey) throws Exception {
+
+        GetOption getOption = GetOption.builder().isPrefix(true).build();
+        List<KeyValue> keyValueList = kvClient.get(
+                ByteSequence.from(ETCD_ROOT_PATH + serviceKey, StandardCharsets.UTF_8), getOption
+        ).get().getKvs();
+
+        return keyValueList.stream().map(keyValue -> {
+            String jsonStr = keyValue.getValue().toString(StandardCharsets.UTF_8);
+            return JSONUtil.toBean(jsonStr, ServiceMetaInfo.class);
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public void destroy() {
+        //释放资源
+        if (client != null) {
+            client.close();
+        }
+        if (kvClient != null) {
+            kvClient.close();
+
+        }
+    }
+}
+```
+
+
+
+#### 6.3.2服务代理对象修改
+
+```java
+public class ServiceProxy implements InvocationHandler {
+
+
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+
+        RpcConfig rpcConfig = RpcApplication.getRpcConfig();
+
+        Serializer serializer = SerializerFactory.getInstance(rpcConfig.getSerializer());
+
+        //构造请求参数
+        String serviceName = method.getDeclaringClass().getName();
+        RpcRequest request = RpcRequest.builder()
+                .serviceName(serviceName)
+                .methodName(method.getName())
+                .paramTypes(method.getParameterTypes())
+                .params(args)
+                .build();
+
+        try {
+            byte[] bytes = serializer.serialize(request);
+            //获取服务提供者地址
+            String registryType = rpcConfig.getRegistryConfig().getType();
+            Registry registry = RegistryFactory.getInstance(registryType);
+            ServiceMetaInfo serviceMetaInfo = new ServiceMetaInfo();
+            serviceMetaInfo.setServiceName(serviceName);
+
+            List<ServiceMetaInfo> serviceList = registry.discover(serviceMetaInfo.getServiceKey());
+            if (serviceList.isEmpty()) {
+                throw new RuntimeException("没有启动符合的节点：" + serviceName);
+            }
+            //todo 暂时只获取第一个
+            serviceMetaInfo = serviceList.get(0);
+            //发送请求
+            try (HttpResponse httpResponse = HttpRequest
+                    .post(serviceMetaInfo.getServiceAddress())
+                    .body(bytes).execute()){
+
+                //处理接口执行结果并返回
+                byte[] result = httpResponse.bodyBytes();
+                //反序列化
+                RpcResponse rpcResponse = serializer.deserialize(result, RpcResponse.class);
+                return rpcResponse.getData();
+
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+}
+```
+
+#### 6.3.3 服务提供者启动时注册
+
+```java
+public class ProviderMain {
+
+    public static void main(String[] args) {
+
+        //初始化RPC框架，读取配置文件
+        RpcApplication.init();
+
+        //服务启动时将服务对象注册到注册器中
+        String serviceName = UserService.class.getName();
+        LocalRegistry.register(serviceName, UserServiceImpl.class);
+
+        //将服务信息注册到注册中心
+        RpcConfig rpcConfig = RpcApplication.getRpcConfig();
+
+        ServiceMetaInfo serviceMetaInfo = new ServiceMetaInfo();
+        serviceMetaInfo.setServiceName(serviceName);
+        serviceMetaInfo.setHost(rpcConfig.getServerHost());
+        serviceMetaInfo.setPort(rpcConfig.getServerPort());
+
+        Registry registry = RegistryFactory.getInstance(RpcApplication.getRpcConfig().getRegistryConfig().getType());
+        try {
+            registry.register(serviceMetaInfo);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        // 启动服务器
+        VertxHttpServer vertxHttpServer = new VertxHttpServer();
+
+        vertxHttpServer.doStart(RpcApplication.getRpcConfig().getServerPort());
+
+    }
+
+}
+```
+
+
+
+### 6.4 优化
+
+
+
+#### 6.4.1 服务节点下线机制
+
+**需求分析：**
+当服务提供者节点宕机时，应该从注册中心移除掉已注册的节点，否则会影响消费者的调用
+
+
+
+**设计方案：**
+
+1. 主动下线：当服务提供者项目正常退出时，主动删除注册中心注册的信息
+2. 被动下线：当服务提供者项目异常退出后，通过Etcd的过期机制，注册信息在TTL结束后就会从Etcd中删除。
+
+
+
+**实现：**
+
+1. 完善EtcdRegistry的destory方法，从Etcd中删除当前节点注册的所有服务
+2. 主动下线可以通过 JVM 提供的 **ShutdownHook** 来实现，这是一种 JVM 提供的机制，允许开发者在 JVM 即将关闭之前执行一些清理的操作，但是**如果是因为程序抛出异常，导致 JVM 被迫关闭，是不会触发这个机制的**，因为并不是 JVM 自主触发的关闭。
+3. 被动下线通过Etcd的过期机制就可以实现了，因为服务宕机后将无法进行续期。
+
+
+
+
+
+#### 6.4.2 心跳检测和续期机制
+
+**需求分析：**
+
+心跳检测是一种用户检测系统是否正常运行的一种机制，通过**定期发送请求**来判断系统的运行情况是否正常。
+
+如果接收方在一定时间内没有正常响应请求，就会触发相应的处理或告警。
+
+例如：最简单的心跳检测就可以通过一个接口来实现；
+
+```java
+@RestController
+public class HealthCheckController{
+  //健康检查接口
+	@GetMapping("/actuator/health")
+	public String healthCheck(){
+		//在这里可以添加其他健康检查逻辑，例如检查数据库连接、第三方服务等
+		//返回一个简单的健康状态
+		return "OK";
+  }
+}
+```
+
+**设计方案：**
+
+但是我们的Etcd自带了key过期机制，不妨换个思路，向注册中心注册服务提供者时，设置一个过期时间，并且定期向注册中心续期（重新注册，刷新过期时间，并且保证**续期周期<过期时间，允许一次容错**），如果在续期的时候发现节点已经过期了，就说明节点宕机了，接着进行相关的处理和告警。
+
+**实现步骤：**
+
+1. 在注册服务提供者时，设置TTL
+2. Etcd在收到注册信息后，会自动维护TTL，TTL结束后会删除注册信息
+3. 缓存所有注册信息，定期续期所有缓存的注册信息，在续期时发现服务提供者已经宕机，删除缓存，告警日志
+
+
+
+#### 6.4.3 服务缓存更新--监听机制
+
+**需求分析：**
+
+正常情况下，服务节点元信息的更新频率是不高的，所以完全可以缓存服务元信息在本地，能够提高性能。
+
+如果服务下线或上线了，也需要一个监听机制，同志本地缓存添加数据或删除数据。
+
+**设计方案：**
+
+1）首先定义两个属性：
+
+- serviceNodeKey：服务节点地址，例：/rpc/com.zjh.common.service.UserService:1.0/localhost:8099
+
+- serviceKey：服务目录，例：/rpc/com.zjh.common.service.UserService:1.0
+
+2）本地添加一个注册信息缓存类，用来缓存服务信息
+
+```java
+    /**
+     * 线程安全的Map缓存，serviceKey(不带host:port的) ->服务列表（多个用于负载均衡）
+     */
+    public static final Map<String, List<ServiceMetaInfo>> CACHE = new ConcurrentHashMap<>();
+```
+
+3）服务发现时，先从缓存中查找，找不到再去注册中心查找，并且存入缓存中，并且监听这个服务目录（防止重复监听）
+
+4）利用etcd的监听机制，监听某个serviceKey（服务目录），如果在目录下进行了PUT或DELETE操作，就向缓存中添加或删除数据。
+
+**开发实现：**
+
+1）缓存类：
+
+```java
+package com.zjh.rpc.registry;
+
+
+import com.zjh.rpc.model.ServiceMetaInfo;
+import org.checkerframework.checker.units.qual.C;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+/**
+ * 服务注册信息缓存
+ *
+ * @author zunf
+ * @date 2024/5/11 17:06
+ */
+public class RegistryServiceCache {
+
+    /**
+     * 线程安全的Map缓存，serviceKey(不带host:port的) ->服务列表（多个用于负载均衡）
+     */
+    public static final Map<String, List<ServiceMetaInfo>> CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * 写入数据到缓存中
+     * @param serviceKey ServiceKey是服务目录的唯一标识符，但是可以对应多个程序（负载均衡）
+     * @param serviceMetaInfos 服务元信息列表
+     */
+    public static void writeCache(String serviceKey, List<ServiceMetaInfo> serviceMetaInfos) {
+        CACHE.put(serviceKey, serviceMetaInfos);
+    }
+
+    /**
+     * 根据ServiceKey获取服务元信息列表
+     * @param serviceKey ServiceKey是服务目录的唯一标识符，但是可以对应多个程序（负载均衡）
+     * @return
+     */
+    public static List<ServiceMetaInfo> getCacheByServiceKey(String serviceKey) {
+        return CACHE.get(serviceKey);
+    }
+
+    /**
+     * 根据 ServiceNodeKey 删除服务元信息
+     *
+     * @param serviceNodeKey 服务程序的唯一标识符
+     */
+    public static void removeCacheByServiceNodeKey(String serviceNodeKey) {
+        CACHE.keySet().stream().filter(serviceKey -> serviceNodeKey.startsWith(serviceKey)).forEach(serviceKey -> {
+            List<ServiceMetaInfo> serviceMetaInfos = CACHE.get(serviceKey);
+            //传进来的值为：/rpc/com.zjh.common.service.UserService:1.0/localhost:8099
+            //serviceMetaInfo.getServiceNodeKey()的值为：com.zjh.common.service.UserService:1.0/localhost:8099
+            //所以用endWith
+            serviceMetaInfos.removeIf(serviceMetaInfo -> serviceNodeKey.endsWith(serviceMetaInfo.getServiceNodeKey()));
+        });
+    }
+}
+```
+
+2）服务发现代码修改
+
+```java
+    @Override
+    public List<ServiceMetaInfo> discover(String serviceKey) throws Exception {
+
+        List<ServiceMetaInfo> serviceList = null;
+
+        //先从服务缓存中获取
+        serviceList = RegistryServiceCache.getCacheByServiceKey(serviceKey);
+
+        if (CollUtil.isEmpty(serviceList)) {
+            //缓存中没有再去注册中心找
+            GetOption getOption = GetOption.builder().isPrefix(true).build();
+            List<KeyValue> keyValueList = kvClient.get(
+                    ByteSequence.from(ETCD_ROOT_PATH + serviceKey, StandardCharsets.UTF_8), getOption
+            ).get().getKvs();
+
+            serviceList = keyValueList.stream().map(keyValue -> {
+                String jsonStr = keyValue.getValue().toString(StandardCharsets.UTF_8);
+                return JSONUtil.toBean(jsonStr, ServiceMetaInfo.class);
+            }).collect(Collectors.toList());
+            //把服务信息添加到缓存里
+            RegistryServiceCache.writeCache(serviceKey, serviceList);
+            //监听这个节点的目录，serviceKey
+            watch(ETCD_ROOT_PATH + serviceKey);
+        }
+
+        if (serviceList.isEmpty()) {
+            throw new RuntimeException("没有启动符合的节点：" + serviceKey);
+        }
+
+        return serviceList;
+    }
+```
+
+3）Etcd注册中心中，添加一个watch方法，用来监听PUT和DELETE事件
+
+**注意：！！！**这个监听器执行方法时，如果报错了，是不会报错在控制台的，而是自己无声无息地关闭进程，不再监听了，例如DELETE操作下，读取Value，但是value为空，再把它用JSONUtil转换成bean就会报错，但是展现出来的就是监听器不再监听了，而不是控制台报错。
+
+```java
+    @Override
+    public void watch(String serviceKey) {
+        boolean isNew = watchingKeySet.add(serviceKey);
+        if (isNew) {
+            Watch watchClient = client.getWatchClient();
+            WatchOption watchOption = WatchOption.builder().isPrefix(true).build();
+            watchClient.watch(ByteSequence.from(serviceKey, StandardCharsets.UTF_8), watchOption, watchResponse -> {
+
+                for (WatchEvent event : watchResponse.getEvents()) {
+                    //删除操作，只能从WatchEvent中拿到key，value为null
+                    String serviceNodeKey = event.getKeyValue().getKey().toString(StandardCharsets.UTF_8);
+
+                    switch (event.getEventType()) {
+                        case DELETE:
+                            log.info("------------服务：{}, 已下线，删除缓存------------", serviceKey);
+                            RegistryServiceCache.removeCacheByServiceNodeKey(serviceNodeKey);
+                            break;
+                        case PUT:
+                            log.info("------------服务：{}, 已上线，添加缓存------------", serviceKey);
+                            String json = event.getKeyValue().getValue().toString(StandardCharsets.UTF_8);
+                            ServiceMetaInfo serviceMetaInfo = JSONUtil.toBean(json, ServiceMetaInfo.class);
+                            List<ServiceMetaInfo> serviceMetaInfoList = RegistryServiceCache.getCacheByServiceKey(serviceKey);
+
+                            if (serviceMetaInfoList == null) {
+                                //如果还不存在该 serviceKey 对应的 List，创建一个
+                                serviceMetaInfoList = new ArrayList<>();
+                                serviceMetaInfoList.add(serviceMetaInfo);
+
+                                RegistryServiceCache.writeCache(serviceKey, serviceMetaInfoList);
+                            } else {
+                                //如果是续签操作，不添加缓存
+                                if (!serviceMetaInfoList.contains(serviceMetaInfo)) {
+                                    serviceMetaInfoList.add(serviceMetaInfo);
+                                }
+                            }
+                            System.out.println(RegistryServiceCache.getCacheByServiceKey(serviceKey));
+                            break;
+                        default:
+                            log.error("非法的Etcd操作类型");
+                    }
+                    //记录日志--更新后的缓存结果
+                    log.info(RegistryServiceCache.getCacheByServiceKey(serviceKey).toString());
+                }
+            });
+        }
+    }
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

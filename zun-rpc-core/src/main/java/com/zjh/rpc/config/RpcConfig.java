@@ -23,6 +23,11 @@ public class RpcConfig {
      */
     private String serializer = "jdk";
 
+    /**
+     * 注册中心配置
+     */
+    private RegistryConfig registryConfig;
+
     //end
 
 
@@ -31,7 +36,7 @@ public class RpcConfig {
     /**
      * 服务提供者地址
      */
-    private String serverHost = "http://localhost";
+    private String serverHost = "localhost";
 
     /**
      * 是否使用模拟数据
@@ -42,6 +47,16 @@ public class RpcConfig {
 
 
     //provider begin
+
+    /**
+     * 服务提供者应用名
+     */
+    private String application;
+
+    /**
+     * 服务提供者版本号
+     */
+    private String version = "1.0";
 
     //end
 }

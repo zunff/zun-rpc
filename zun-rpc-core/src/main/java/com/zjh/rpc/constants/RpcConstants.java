@@ -13,4 +13,9 @@ public interface RpcConstants {
      */
     String CONFIG_PREFIX = "rpc";
 
+    /**
+     * 注册中心配置文件加载前缀
+     */
+    String REGISTRY_CONFIG_PREFIX = CONFIG_PREFIX + ".registry";
+
 }

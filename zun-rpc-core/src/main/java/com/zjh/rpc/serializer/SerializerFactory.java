@@ -1,6 +1,5 @@
-package com.zjh.rpc.serializer.factory;
+package com.zjh.rpc.serializer;
 
-import com.zjh.rpc.serializer.Serializer;
 import com.zjh.rpc.spi.SpiLoader;
 
 /**

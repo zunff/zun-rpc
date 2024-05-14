@@ -1,8 +1,6 @@
-package com.zjh.rpc.proxy.factory;
+package com.zjh.rpc.proxy;
 
 import com.zjh.rpc.RpcApplication;
-import com.zjh.rpc.proxy.MockServiceProxy;
-import com.zjh.rpc.proxy.ServiceProxy;
 
 import java.lang.reflect.Proxy;
 

@@ -2,7 +2,7 @@ package com.zjh.consumer;
 
 import com.zjh.common.model.User;
 import com.zjh.common.service.UserService;
-import com.zjh.rpc.proxy.factory.ServiceProxyFactory;
+import com.zjh.rpc.proxy.ServiceProxyFactory;
 
 /**
  * 消费者
@@ -16,7 +16,15 @@ public class ConsumerMain {
         //获取UserServiceImpl示例
         UserService userService = ServiceProxyFactory.getProxy(UserService.class);
 
-        User user = userService.getUser("ZunF");
+        User user = userService.getUser("ZunF1");
+        if (user == null) {
+            System.out.println("user == null");
+        } else {
+            System.out.println(user);
+        }
+
+
+        user = userService.getUser("ZunF2");
         if (user == null) {
             System.out.println("user == null");
         } else {

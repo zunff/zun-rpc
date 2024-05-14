@@ -6,12 +6,16 @@ import com.zjh.rpc.RpcApplication;
 import com.zjh.rpc.config.RpcConfig;
 import com.zjh.rpc.model.RpcRequest;
 import com.zjh.rpc.model.RpcResponse;
+import com.zjh.rpc.model.ServiceMetaInfo;
+import com.zjh.rpc.registry.Registry;
+import com.zjh.rpc.registry.RegistryFactory;
+import com.zjh.rpc.registry.RegistryServiceCache;
 import com.zjh.rpc.serializer.Serializer;
-import com.zjh.rpc.serializer.factory.SerializerFactory;
-import com.zjh.rpc.serializer.impl.JdkSerializer;
+import com.zjh.rpc.serializer.SerializerFactory;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.util.List;
 
 /**
  * 服务代理（JDK 动态代理）
@@ -30,8 +34,9 @@ public class ServiceProxy implements InvocationHandler {
         Serializer serializer = SerializerFactory.getInstance(rpcConfig.getSerializer());
 
         //构造请求参数
+        String serviceName = method.getDeclaringClass().getName();
         RpcRequest request = RpcRequest.builder()
-                .serviceName(method.getDeclaringClass().getName())
+                .serviceName(serviceName)
                 .methodName(method.getName())
                 .paramTypes(method.getParameterTypes())
                 .params(args)
@@ -39,12 +44,18 @@ public class ServiceProxy implements InvocationHandler {
 
         try {
             byte[] bytes = serializer.serialize(request);
-            //拼接消费者服务URL
-            StringBuilder sb = new StringBuilder();
-            sb.append(rpcConfig.getServerHost()).append(":").append(rpcConfig.getServerPort());
+            //获取服务提供者地址
+            String registryType = RpcApplication.getRpcConfig().getRegistryConfig().getType();
+            Registry registry = RegistryFactory.getInstance(registryType);
+            ServiceMetaInfo serviceMetaInfo = new ServiceMetaInfo();
+            serviceMetaInfo.setServiceName(serviceName);
+            List<ServiceMetaInfo> serviceList =  registry.discover(serviceMetaInfo.getServiceKey());
+
+            //todo 暂时只获取第一个
+            serviceMetaInfo = serviceList.get(0);
             //发送请求
             try (HttpResponse httpResponse = HttpRequest
-                    .post(sb.toString())
+                    .post(serviceMetaInfo.getServiceAddress())
                     .body(bytes).execute()){
 
                 //处理接口执行结果并返回

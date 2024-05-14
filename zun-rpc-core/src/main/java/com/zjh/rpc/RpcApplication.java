@@ -1,7 +1,10 @@
 package com.zjh.rpc;
 
+import com.zjh.rpc.config.RegistryConfig;
 import com.zjh.rpc.config.RpcConfig;
 import com.zjh.rpc.constants.RpcConstants;
+import com.zjh.rpc.registry.Registry;
+import com.zjh.rpc.registry.RegistryFactory;
 import com.zjh.rpc.utils.ConfigUtils;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,6 +31,7 @@ public class RpcApplication {
         //读取配置对象
         try {
             newConfig = ConfigUtils.loadConfig(RpcConfig.class, RpcConstants.CONFIG_PREFIX);
+            newConfig.setRegistryConfig(ConfigUtils.loadConfig(RegistryConfig.class, RpcConstants.REGISTRY_CONFIG_PREFIX));
         } catch (Exception e) {
             //配置初始化失败，使用默认值
             newConfig = new RpcConfig();
@@ -44,7 +48,13 @@ public class RpcApplication {
      */
     public static void init(RpcConfig newRpcConfig) {
         rpcConfig = newRpcConfig;
+        //注册中心初始化
+        RegistryConfig registryConfig = rpcConfig.getRegistryConfig();
+        Registry registry = RegistryFactory.getInstance(registryConfig.getType());
+        registry.init(registryConfig);
         log.info("rpc init config = {}", newRpcConfig.toString());
+        //初始化结束后，创建 ShutdownHook ,JVM退出时执行
+        Runtime.getRuntime().addShutdownHook(new Thread(registry::destroy));
     }
 
     /**
