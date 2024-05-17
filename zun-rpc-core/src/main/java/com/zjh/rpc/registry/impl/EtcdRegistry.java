@@ -167,7 +167,6 @@ public class EtcdRegistry implements Registry {
                             RegistryServiceCache.removeCacheByServiceNodeKey(serviceNodeKey);
                             break;
                         case PUT:
-                            log.info("------------服务：{}, 已上线，添加缓存------------", serviceKey);
                             String json = event.getKeyValue().getValue().toString(StandardCharsets.UTF_8);
                             ServiceMetaInfo serviceMetaInfo = JSONUtil.toBean(json, ServiceMetaInfo.class);
                             List<ServiceMetaInfo> serviceMetaInfoList = RegistryServiceCache.getCacheByServiceKey(serviceKey);
@@ -181,10 +180,10 @@ public class EtcdRegistry implements Registry {
                             } else {
                                 //如果是续签操作，不添加缓存
                                 if (!serviceMetaInfoList.contains(serviceMetaInfo)) {
+                                    log.info("------------服务：{}, 已上线，添加缓存------------", serviceKey);
                                     serviceMetaInfoList.add(serviceMetaInfo);
                                 }
                             }
-                            System.out.println(RegistryServiceCache.getCacheByServiceKey(serviceKey));
                             break;
                         default:
                             log.error("非法的Etcd操作类型");

@@ -1,29 +1,30 @@
 package com.zjh.rpc.server.impl;
 
 import com.zjh.rpc.server.WebServer;
-import com.zjh.rpc.server.handler.VertxHttpServerHandler;
+import com.zjh.rpc.server.handler.VertxTcpServerHandler;
 import io.vertx.core.Vertx;
+import io.vertx.core.net.NetServer;
 
 /**
- * VertxHttp服务器
+ * Vertx实现的Tcp协议服务器
  *
  * @author zunf
- * @date 2024/5/6 09:21
+ * @date 2024/5/14 18:09
  */
-public class VertxHttpServer implements WebServer {
+public class VertxTcpServer implements WebServer {
+
     @Override
     public void doStart(int port) {
-
-        //创建 Vert.x 实例
+        //创建Vertx实例
         Vertx vertx = Vertx.vertx();
 
-        //创建 HTTP 服务器
-        io.vertx.core.http.HttpServer server = vertx.createHttpServer();
+        //创建 Tcp 服务器
+        NetServer server = vertx.createNetServer();
 
-        //设置请求的处理器
-        server.requestHandler(new VertxHttpServerHandler());
+        //设置 Tcp 处理器
+        server.connectHandler(new VertxTcpServerHandler());
 
-        //启动 HTTP 服务器并监听指定端口
+        //启动 Tcp 服务器并监听指定端口
         server.listen(port, result -> {
             if (result.succeeded()) {
                 System.out.println("Server is now listening on port " + port);

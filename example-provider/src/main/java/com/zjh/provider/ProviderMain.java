@@ -8,7 +8,9 @@ import com.zjh.rpc.model.ServiceMetaInfo;
 import com.zjh.rpc.registry.LocalRegistry;
 import com.zjh.rpc.registry.Registry;
 import com.zjh.rpc.registry.RegistryFactory;
+import com.zjh.rpc.server.WebServer;
 import com.zjh.rpc.server.impl.VertxHttpServer;
+import com.zjh.rpc.server.impl.VertxTcpServer;
 
 /**
  * 提供者
@@ -43,9 +45,9 @@ public class ProviderMain {
         }
 
         // 启动服务器
-        VertxHttpServer vertxHttpServer = new VertxHttpServer();
+        WebServer webServer = new VertxTcpServer();
 
-        vertxHttpServer.doStart(RpcApplication.getRpcConfig().getServerPort());
+        webServer.doStart(RpcApplication.getRpcConfig().getServerPort());
 
     }
 

@@ -10,23 +10,25 @@ import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
 
 /**
- * Vertx 请求处理器
+ * Vertx Http协议 请求处理器
  *
  * @author zunf
  * @date 2024/5/6 09:29
  */
+@Slf4j
 public class VertxHttpServerHandler implements Handler<HttpServerRequest> {
 
 
     @Override
     public void handle(HttpServerRequest request) {
         //记录日志
-        System.out.println("Received request: " + request.method() + " " + request.uri());
+        log.info("Received request: {}  {}", request.uri(), request.method());
 
         //创建序列化器
         Serializer serializer = SerializerFactory.getInstance(RpcApplication.getRpcConfig().getSerializer());

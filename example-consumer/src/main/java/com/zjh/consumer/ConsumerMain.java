@@ -23,7 +23,6 @@ public class ConsumerMain {
             System.out.println(user);
         }
 
-
         user = userService.getUser("ZunF2");
         if (user == null) {
             System.out.println("user == null");
