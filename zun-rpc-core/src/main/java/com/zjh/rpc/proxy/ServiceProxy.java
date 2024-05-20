@@ -12,9 +12,9 @@ import com.zjh.rpc.model.ServiceMetaInfo;
 import com.zjh.rpc.protocol.ProtocolMessage;
 import com.zjh.rpc.protocol.ProtocolMessageDecoder;
 import com.zjh.rpc.protocol.ProtocolMessageEncoder;
+import com.zjh.rpc.protocol.wrapper.TcpBufferHandlerWrapper;
 import com.zjh.rpc.registry.Registry;
 import com.zjh.rpc.registry.RegistryFactory;
-import com.zjh.rpc.registry.RegistryServiceCache;
 import com.zjh.rpc.serializer.Serializer;
 import com.zjh.rpc.serializer.SerializerFactory;
 import io.vertx.core.Vertx;
@@ -22,8 +22,6 @@ import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetSocket;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
@@ -37,10 +35,8 @@ import java.util.concurrent.CompletableFuture;
  * @author zunf
  * @date 2024/5/6 09:25
  */
+@Slf4j
 public class ServiceProxy implements InvocationHandler {
-
-
-    private static final Logger log = LoggerFactory.getLogger(ServiceProxy.class);
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
@@ -81,7 +77,7 @@ public class ServiceProxy implements InvocationHandler {
         //建立链接
         netClient.connect(serviceMetaInfo.getPort(), serviceMetaInfo.getHost(), result -> {
             if (result.succeeded()) {
-                NetSocket socket = result.result();
+                NetSocket netSocket = result.result();
                 ProtocolMessage.Header header = new ProtocolMessage.Header();
 
                 SerializerEnums serializerEnums = SerializerEnums.of(RpcApplication.getRpcConfig().getSerializer());
@@ -96,19 +92,19 @@ public class ServiceProxy implements InvocationHandler {
                 ProtocolMessage<RpcRequest> protocolMessage = new ProtocolMessage<>(header, request);
                 try {
                     Buffer encode = ProtocolMessageEncoder.encode(protocolMessage);
-                    socket.write(encode);
+                    netSocket.write(encode);
                 } catch (IOException e) {
                     throw new RuntimeException("协议消息编码错误" + e);
                 }
-                //接受响应
-                socket.handler(buffer -> {
+                //接收响应，使用自己封装的装饰者模式加强过的能够处理半包、粘包的Handler
+                netSocket.handler(new TcpBufferHandlerWrapper(buffer -> {
                     try {
                         ProtocolMessage<?> decode = ProtocolMessageDecoder.decode(buffer);
                         completableFuture.complete((RpcResponse) decode.getBody());
                     } catch (IOException e) {
                         throw new RuntimeException("协议消息解码错误" + e);
                     }
-                });
+                }));
             } else {
                 log.error("Fail to connect to server", result.cause());
             }

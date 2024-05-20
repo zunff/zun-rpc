@@ -1179,6 +1179,8 @@ public class RegistryServiceCache {
 
 ### 6.5 自定义协议
 
+#### 6.5.1 基础实现
+
 **需求分析：**
 
 目前我们的网络传输使用的是HTTP的协议，HTTP协议的请求头比较“重”，会影响传输效率。
@@ -1241,6 +1243,91 @@ public class RegistryServiceCache {
 4）定义Tcp协议的请求处理器（服务提供者）
 
 5）定义Tcp协议的服务代理逻辑（服务消费者）
+
+
+
+#### 6.5.2 半包/粘包问题解决
+
+**需求分析：**
+
+1）服务端跟客户端建立长链接后，服务端发送的多个数据包，数据包1的后半段跟数据包2粘在一起了，就导致数据包1形成了半包问题、数据包2形成了粘包问题
+
+2）解决方法：每次根据请求头中的请求体长度数据，判断是否出现半包、粘包
+
+- 出现半包就不读，等待下一次一起读
+- 出现粘包就只读属于自己的一部分，后面的一部分留到下次读
+- 在Vertx中，内置了RecordParser，使用这个类能够保证每次只读指定长度的数据
+
+3）现在我们的消费者每次远程调用时，都与Tcp Server 新建一个链接，一个链接里面也只会发送一个数据包，等待 Tcp Server 响应后就关闭链接了，所以理论上来说并不会出现半包/粘包的问题，但是出于便于**扩展--链接池**的考虑，做一个半包/粘包的预防。
+
+
+
+**技术方案：**
+
+1）因为消费者和提供者都需要解决这个问题，所以我们使用**装饰者模式**来为`Handler<Buffer>`做一个增强，让他具备处理半包、粘包的能力
+
+2）在装饰者模式中，每次读取数据，都读两次，第一次读请求头长度的数据，然后从请求头中读取请求体的长度，第二次读请求体的长度，然后拼接成一个完整的数据，再用传进来的Handler对数据进行处理。
+
+装饰者类：
+
+```java
+/**
+ * 使用装饰者模式让 Handler<Buffer> 具备处理半包、粘包的能力
+ *
+ * @author zunf
+ * @date 2024/5/17 15:58
+ */
+public class TcpBufferHandlerWrapper implements Handler<Buffer> {
+
+    /**
+     * 使用这个对象读数据，能够保证每次只读指定长度的数据
+     * 多出的数据会留到下一次读取
+     * 少了数据会读取下一个数据包，保证一次读取固定的长度
+     */
+    private final RecordParser recordParser;
+
+    public TcpBufferHandlerWrapper(Handler<Buffer> handler) {
+        this.recordParser = initRecordParser(handler);
+    }
+
+    @Override
+    public void handle(Buffer buffer) {
+        recordParser.handle(buffer);
+    }
+
+    private RecordParser initRecordParser(Handler<Buffer> handler) {
+        //先读取请求头
+        RecordParser parser = RecordParser.newFixed(ProtocolConstants.MESSAGE_HEAD_LENGTH);
+        //先处理一下半包和粘包
+        parser.setOutput(new Handler<Buffer>() {
+            //初始化为-1，表示还没开始读取
+            private int size = -1;
+            //存储一个完成的读取（头+体）
+            private Buffer resultBuffer = Buffer.buffer();
+            @Override
+            public void handle(Buffer buffer) {
+                if (size == -1) {
+                    //还没开始读取，先读请求头，获取请求体长度，并且修改下一次读取的固定长度
+                    int bodyLength = buffer.getInt(13);
+                    size = bodyLength;
+                    parser.fixedSizeMode(bodyLength);
+                    resultBuffer.appendBuffer(buffer);
+                } else {
+                    //读取请求体，将请求体写入结果中
+                    resultBuffer.appendBuffer(buffer);
+                    //完整的数据包已经构建，调用处理程序
+                    handler.handle(resultBuffer);
+                    //恢复状态，进行下一个数据包处理
+                    size = -1;
+                    parser.fixedSizeMode(ProtocolConstants.MESSAGE_HEAD_LENGTH);
+                    resultBuffer = Buffer.buffer();
+                }
+            }
+        });
+        return parser;
+    }
+}
+```
 
 
 

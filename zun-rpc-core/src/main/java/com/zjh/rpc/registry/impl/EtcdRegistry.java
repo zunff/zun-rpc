@@ -5,6 +5,7 @@ import cn.hutool.cron.CronUtil;
 import cn.hutool.cron.task.Task;
 import cn.hutool.json.JSONUtil;
 import com.zjh.rpc.config.RegistryConfig;
+import com.zjh.rpc.constants.RpcConstants;
 import com.zjh.rpc.model.ServiceMetaInfo;
 import com.zjh.rpc.registry.Registry;
 import com.zjh.rpc.registry.RegistryServiceCache;
@@ -123,8 +124,7 @@ public class EtcdRegistry implements Registry {
 
     @Override
     public void heartbeat() {
-        //每十秒续期一次
-        CronUtil.schedule("*/10 * * * * *", new Task() {
+        CronUtil.schedule(RpcConstants.HEAT_BEAT_SCHEDULE_STR, new Task() {
             @Override
             public void execute() {
                 for (String key : localRegistryNodeKeySet) {

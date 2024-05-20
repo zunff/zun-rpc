@@ -10,6 +10,7 @@ import com.zjh.rpc.model.RpcResponse;
 import com.zjh.rpc.protocol.ProtocolMessage;
 import com.zjh.rpc.protocol.ProtocolMessageDecoder;
 import com.zjh.rpc.protocol.ProtocolMessageEncoder;
+import com.zjh.rpc.protocol.wrapper.TcpBufferHandlerWrapper;
 import com.zjh.rpc.registry.LocalRegistry;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
@@ -30,14 +31,14 @@ public class VertxTcpServerHandler implements Handler<NetSocket> {
 
     @Override
     public void handle(NetSocket netSocket) {
-        netSocket.handler(buffer -> {
+        //使用自己封装的装饰者模式加强过的能够处理半包、粘包的Handler
+        netSocket.handler(new TcpBufferHandlerWrapper(buffer -> {
 
             ProtocolMessage.Header header = new ProtocolMessage.Header();
 
             //处理请求，调用服务，获得返回体
-            RpcResponse rpcResponse = null;
             try {
-                rpcResponse = handleRequest(buffer, header);
+                RpcResponse rpcResponse = handleRequest(buffer, header);
 
                 SerializerEnums serializerEnums = SerializerEnums.of(RpcApplication.getRpcConfig().getSerializer());
                 if (serializerEnums == null) {
@@ -57,7 +58,7 @@ public class VertxTcpServerHandler implements Handler<NetSocket> {
             } catch (Exception e) {
                 log.error("调用服务失败:{}", e.getMessage());
             }
-        });
+        }));
     }
 
     private RpcResponse handleRequest(Buffer buffer, ProtocolMessage.Header header) throws Exception {
@@ -76,7 +77,7 @@ public class VertxTcpServerHandler implements Handler<NetSocket> {
         Method method = serviceClass.getMethod(rpcRequest.getMethodName(), rpcRequest.getParamTypes());
         Object result = null;
         try {
-            //class.newInstance()在java9已经标为废弃，因为其只能创建有无参构造器的对象的局限性
+            //class.newInstance()在java9已经标为废弃，因其只能创建有无参构造器的对象的局限性
             result = method.invoke(serviceClass.getConstructor().newInstance(), rpcRequest.getParams());
         } catch (Exception e) {
             rpcResponse.setMessage(e.getMessage());
