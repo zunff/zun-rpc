@@ -6,6 +6,8 @@ import com.zjh.rpc.RpcApplication;
 import com.zjh.rpc.config.RpcConfig;
 import com.zjh.rpc.enums.MessageTypeEnums;
 import com.zjh.rpc.enums.SerializerEnums;
+import com.zjh.rpc.loadbalancer.LoadBalancer;
+import com.zjh.rpc.loadbalancer.LoadBalancerFactory;
 import com.zjh.rpc.model.RpcRequest;
 import com.zjh.rpc.model.RpcResponse;
 import com.zjh.rpc.model.ServiceMetaInfo;
@@ -26,7 +28,9 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -57,10 +61,16 @@ public class ServiceProxy implements InvocationHandler {
             serviceMetaInfo.setServiceName(serviceName);
             List<ServiceMetaInfo> serviceList = registry.discover(serviceMetaInfo.getServiceKey());
 
-            //todo 暂时只获取第一个
-            serviceMetaInfo = serviceList.get(0);
+            RpcConfig rpcConfig = RpcApplication.getRpcConfig();
+            //负载均衡
+            LoadBalancer loadBalancer = LoadBalancerFactory.getInstance(rpcConfig.getLoadBalancer());
+            //将调用方法名作为负载均衡参数
+            Map<String, Object> params = new HashMap<>();
+            params.put("methodName", request.getMethodName());
+            //获取负载均衡算法选出的服务
+            serviceMetaInfo = loadBalancer.select(params, serviceList);
             //发送请求
-            return invokeByTcp(serviceMetaInfo, request);
+            return invokeByTcp(serviceMetaInfo, request, rpcConfig);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -69,7 +79,7 @@ public class ServiceProxy implements InvocationHandler {
         return null;
     }
 
-    private Object invokeByTcp(ServiceMetaInfo serviceMetaInfo, RpcRequest request) throws Exception {
+    private Object invokeByTcp(ServiceMetaInfo serviceMetaInfo, RpcRequest request, RpcConfig rpcConfig) throws Exception {
         RpcResponse rpcResponse = null;
         Vertx vertx = Vertx.vertx();
         NetClient netClient = vertx.createNetClient();
@@ -80,7 +90,7 @@ public class ServiceProxy implements InvocationHandler {
                 NetSocket netSocket = result.result();
                 ProtocolMessage.Header header = new ProtocolMessage.Header();
 
-                SerializerEnums serializerEnums = SerializerEnums.of(RpcApplication.getRpcConfig().getSerializer());
+                SerializerEnums serializerEnums = SerializerEnums.of(rpcConfig.getSerializer());
                 if (serializerEnums == null) {
                     throw new RuntimeException("序列化器类型不存在");
                 }
@@ -116,9 +126,8 @@ public class ServiceProxy implements InvocationHandler {
         return rpcResponse.getData();
     }
 
-    private Object invokeByHttp(ServiceMetaInfo serviceMetaInfo, RpcRequest request) throws IOException {
+    private Object invokeByHttp(ServiceMetaInfo serviceMetaInfo, RpcRequest request, RpcConfig rpcConfig) throws IOException {
         //序列化body
-        RpcConfig rpcConfig = RpcApplication.getRpcConfig();
         Serializer serializer = SerializerFactory.getInstance(rpcConfig.getSerializer());
         byte[] bytes = serializer.serialize(request);
 

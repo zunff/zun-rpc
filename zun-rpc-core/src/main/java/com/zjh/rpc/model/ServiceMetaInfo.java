@@ -48,7 +48,7 @@ public class ServiceMetaInfo {
 
     /**
      *
-     * @return 服务节点的唯一表示服（一个服务可能有多个节点来负载均衡）
+     * @return 服务节点的唯一标识符（一个服务可能有多个节点来负载均衡）
      */
     public String getServiceNodeKey() {
         return String.format("%s/%s:%s", getServiceKey(), host, port);

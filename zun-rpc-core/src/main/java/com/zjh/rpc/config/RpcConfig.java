@@ -1,5 +1,6 @@
 package com.zjh.rpc.config;
 
+import com.zjh.rpc.loadbalancer.LoaderBalancerKeys;
 import lombok.Data;
 
 /**
@@ -43,6 +44,11 @@ public class RpcConfig {
      */
     private boolean isMock = false;
 
+
+    /**
+     * 负载均衡器，默认轮询
+     */
+    private String loadBalancer = LoaderBalancerKeys.ROUND_ROBIN;
     //end
 
 

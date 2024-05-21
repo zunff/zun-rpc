@@ -4,6 +4,9 @@ import com.zjh.common.model.User;
 import com.zjh.common.service.UserService;
 import com.zjh.rpc.proxy.ServiceProxyFactory;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * 消费者
  *
@@ -24,6 +27,13 @@ public class ConsumerMain {
         }
 
         user = userService.getUser("ZunF2");
+        if (user == null) {
+            System.out.println("user == null");
+        } else {
+            System.out.println(user);
+        }
+
+        user = userService.getUser("ZunF3");
         if (user == null) {
             System.out.println("user == null");
         } else {
