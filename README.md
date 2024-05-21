@@ -1331,7 +1331,170 @@ public class TcpBufferHandlerWrapper implements Handler<Buffer> {
 
  
 
-### 6.6
+## 6.6 负载均衡
+
+**需求分析：**
+
+负载均衡（LoadBalancer 简称 LB），是通过一个代理服务器，依据特定的算法，将请求分发到不同的服务器上。但对于用户而言，每次请求的都是代理服务器的地址，完全感受不到网站到底部署了多少台服务器，也不用关心他是怎么部署的。
+
+使用负载均衡，能够提升系统的可用性和并发度，如果一台服务器崩溃了，其他的服务器将会分担他本来应该处理的请求。
+
+![img](./img/202311071359043.jpeg) 
+
+
+
+负载均衡的分层：
+
+首先先看一下计算机网络模型图
+
+<img src="./img/7d92e8ed8c6d6303f71d082eab432d8f.jpeg" style="zoom:80%;" /> 
+
+1. **二层负载均衡**：二层指**数据链路层**，这一层还没有IP的概念，所以只能通过MAC地址来区分机器。负载均衡是通过一个设备来修改报文中的目标MAC地址来转发的。这一层的负载均衡性能极高，但只能通过硬件来实现，所以成本也极高。
+2. **三层负载均衡**：三层指的是**网络层**，这一层开始有了IP的概念，可以通过一个设备来根据算法，将请求转发到不同的IP下，跟上一层一样，这一层也只能通过硬件来实现。
+3. **四层负载均衡**：四层指的是**传输层**，这一层有了端口的概念，负载均衡设备可以将请求转发到某IP的某个端口里，也就可以区分机器上的应用了。这一层的**性能也很高，处理几十万并发不是问题、另一方面成本也很低，可以用纯软件实现，因此在企业中的应用十分广泛。** 
+   - 软件比如主流且开源的LVS（Linux Virtual Server），底层可选多种负载模式，比如 NAT（网络地址转换）、DR（直接路由）、TUN（隧道）
+4. **七层负载均衡**：七层指的是**应用层**，在最高的这层中，可以获得最详细的信息，比如请求头、Cookie等，甚至可以实现将PC端的请求发送到服务器A、手机端的请求转发到服务器B。这种负载均衡的实现成本极低，也最为灵活，是我们开发人员最常用的。
+   - 实现方式有很多，比如主流的 Nginx、HAProxy 都可以，写个配置基本就能转发请求了，大部分情况下性能也够用了。
+
+
+
+**技术方案：**
+
+1）定义一个LoadBalancer接口、提供三种负载均衡的算法：轮询、随机、一致性Hash
+
+2）使用SPI机制加载这些负载均衡算法
+
+
+
+**开发实现：**
+
+#### 6.6.1 轮训负载均衡器
+
+```java
+/**
+ * 轮训负载均衡器
+ *
+ * @author zunf
+ * @date 2024/5/20 14:16
+ */
+public class RoundRobinLoadBalancer implements LoadBalancer {
+
+    /**
+     * JUC包中线程安全的原子计数器
+     */
+    private final AtomicInteger currentIndex = new AtomicInteger(0);
+
+    @Override
+    public ServiceMetaInfo select(Map<String, Object> params, List<ServiceMetaInfo> serviceMetaInfoList) {
+        if (serviceMetaInfoList.isEmpty()) {
+            return null;
+        }
+        int size = serviceMetaInfoList.size();
+        if (size == 1) {
+            return serviceMetaInfoList.get(0);
+        }
+        //取模轮训
+        int index = currentIndex.getAndIncrement() % size;
+        return serviceMetaInfoList.get(index);
+    }
+}
+```
+
+#### 6.6.2 随机负载均衡器
+
+```java
+/**
+ * 随机负载均衡器
+ *
+ * @author zunf
+ * @date 2024/5/20 14:24
+ */
+public class RandomLoadBalancer implements LoadBalancer {
+
+    private final Random random = new Random();
+
+    @Override
+    public ServiceMetaInfo select(Map<String, Object> params, List<ServiceMetaInfo> serviceMetaInfoList) {
+        if (serviceMetaInfoList.isEmpty()) {
+            return null;
+        }
+        int size = serviceMetaInfoList.size();
+        if (size == 1) {
+            return serviceMetaInfoList.get(0);
+        }
+        return serviceMetaInfoList.get(random.nextInt(size));
+    }
+}
+```
+
+#### 6.6.3 一致性Hash负载均衡器
+
+```java
+/**
+ * 一致性Hash负载均衡器
+ *
+ * @author zunf
+ * @date 2024/5/21 10:32
+ */
+public class ConsistentHashLoadBalancer implements LoadBalancer {
+
+    /**
+     * 一致性 Hash 环，存放虚拟节点
+     */
+    private final TreeMap<Integer, ServiceMetaInfo> virtualNodes = new TreeMap<>();
+
+    /**
+     * 虚拟节点数
+     */
+    private static final int VIRTUAL_NODE_NUM = 100;
+
+    @Override
+    public ServiceMetaInfo select(Map<String, Object> params, List<ServiceMetaInfo> serviceMetaInfoList) {
+        if (serviceMetaInfoList.isEmpty()) {
+            return null;
+        }
+        if (serviceMetaInfoList.size() == 1) {
+            return serviceMetaInfoList.get(0);
+        }
+        //构建一致性Hash环
+        for (ServiceMetaInfo serviceMetaInfo : serviceMetaInfoList) {
+            //每一个节点都建立虚拟节点
+            for (int i = 0; i < VIRTUAL_NODE_NUM; i++) {
+                int hash = getHash(serviceMetaInfo.getServiceNodeKey() + "#" + i);
+                virtualNodes.put(hash, serviceMetaInfo);
+            }
+        }
+        //获取调用请求的Hash值
+        int hash = getHash(params);
+        //选择一个最接近且大于请求hash值的虚拟节点
+        Map.Entry<Integer, ServiceMetaInfo> entry = virtualNodes.ceilingEntry(hash);
+        if (entry == null) {
+            //如果没有大于等于当前请求的hash值的虚拟节点，则返回环首部的节点
+            entry = virtualNodes.firstEntry();
+        }
+        return entry.getValue();
+    }
+
+    /**
+     * Hash算法
+     * @param key
+     * @return hash值
+     */
+    private int getHash(Object key) {
+        return key.hashCode();
+    }
+}
+```
+
+
+
+
+
+
+
+
+
+
 
 
 
