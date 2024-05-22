@@ -7,6 +7,7 @@ import com.zjh.rpc.enums.SerializerEnums;
 import com.zjh.rpc.serializer.Serializer;
 import com.zjh.rpc.serializer.SerializerFactory;
 import io.vertx.core.buffer.Buffer;
+import lombok.SneakyThrows;
 
 import java.io.IOException;
 
@@ -23,7 +24,8 @@ public class ProtocolMessageEncoder {
      * @param message RpcRequest 或 RpcResponse对象
      * @return 编码结果
      */
-    public static Buffer encode(ProtocolMessage<?> message) throws IOException {
+    @SneakyThrows
+    public static Buffer encode(ProtocolMessage<?> message) {
         ProtocolMessage.Header header = message.getHeader();
         Buffer buffer = Buffer.buffer();
         buffer.appendByte(ProtocolConstants.MAGIC);

@@ -1,0 +1,4 @@
+failFast=com.zjh.rpc.fault.tolerance.impl.FailFastToleranceStrategy
+failSafe=com.zjh.rpc.fault.tolerance.impl.FailSafeToleranceStrategy
+failBack=com.zjh.rpc.fault.tolerance.impl.FailBackToleranceStrategy
+failOver=com.zjh.rpc.fault.tolerance.impl.FailOverToleranceStrategy

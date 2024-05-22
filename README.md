@@ -1177,9 +1177,9 @@ public class RegistryServiceCache {
 
 
 
-### 6.5 自定义协议
+## 七、自定义协议
 
-#### 6.5.1 基础实现
+### 7.1 基础实现
 
 **需求分析：**
 
@@ -1246,7 +1246,7 @@ public class RegistryServiceCache {
 
 
 
-#### 6.5.2 半包/粘包问题解决
+### 7.2 半包/粘包问题解决
 
 **需求分析：**
 
@@ -1331,7 +1331,7 @@ public class TcpBufferHandlerWrapper implements Handler<Buffer> {
 
  
 
-## 6.6 负载均衡
+## 八、 负载均衡
 
 **需求分析：**
 
@@ -1368,7 +1368,7 @@ public class TcpBufferHandlerWrapper implements Handler<Buffer> {
 
 **开发实现：**
 
-#### 6.6.1 轮训负载均衡器
+### 8.1 轮训负载均衡器
 
 ```java
 /**
@@ -1400,7 +1400,7 @@ public class RoundRobinLoadBalancer implements LoadBalancer {
 }
 ```
 
-#### 6.6.2 随机负载均衡器
+### 8.2 随机负载均衡器
 
 ```java
 /**
@@ -1427,7 +1427,7 @@ public class RandomLoadBalancer implements LoadBalancer {
 }
 ```
 
-#### 6.6.3 一致性Hash负载均衡器
+### 8.3 一致性Hash负载均衡器
 
 ```java
 /**
@@ -1488,7 +1488,341 @@ public class ConsistentHashLoadBalancer implements LoadBalancer {
 
 
 
+## 九、重试机制
 
+### 9.1 需求分析
+
+目前，如果使用RPC框架的消费者调用服务提供者报错，就会抛出异常。
+
+调用接口失败的原因有很多，有时候可能确实是服务提供者的接口出现了错误；但也有时候是网络不稳定或者服务提供者重启等**临时性问题**，只需要重新发送请求，就能够正常调用。在这种情况下我们更希望RPC框架具有重试的能力，提高系统的可用性。
+
+
+
+### 9.2 设计方案
+
+不同的重试策略无非就是考虑以下几个问题：
+
+1. 什么时候、什么条件下重试？
+2. 每次重试的时间间隔？
+3. 什么时候停止重试、总共重试多少次？
+4. 重试的时候要做什么？
+
+下面一个个问题来讨论：
+
+#### 9.2.1 重试条件
+
+当接口发生异常时，进行重试（这里的异常可以区分一下，只有网络异常，才会进行重试）
+
+#### 9.2.2 重试时间
+
+重试时间（重试等待）就有很多的策略了：
+
+1）固定时间重试（Fixed Retry Interval）：在每次重试之后使用固定的时间间隔
+
+```
+1s
+2s
+3s
+4s
+```
+
+2）指针退避重试（Exponential Backoff Retry）：在每次重试之后，重试的时间间隔都会以指数级增加，避免请求过于密集
+
+```
+1s
+3s（多等2s）
+7s（多等4s）
+15s（多等8s）
+31s（多等16s）
+```
+
+3）随机延迟重试（Random Delay Retry）：在每次重试之后，使用随机的时间间隔，避免请求的同时发生
+
+4）可变延迟重试（Variable Delay Retry）：根据先前重试的成功或失败情况，动态调整下一次重试的延迟时间。比如根据前一次重试的响应时间来调整下一次重试的等待时间。
+
+值得一提的是，以上的策略都是可以组合使用的，要根据具体情况灵活应用，比如在多次指针退避重试后，都是失败，就转换为固定时间重试。
+
+#### 9.2.3 停止重试条件
+
+1）最大尝试次数：达到最大尝试次数后不再重试
+
+2）超时停止：达到最大重试时间后不再重试
+
+
+
+#### 9.2.4 重试工作
+
+重试工作一般就是重新执行刚刚失败的操作。
+
+但如果达到停止重试的条件之后，往往还有其他的处理，例如：
+
+1. 通知告警，让开发人员人工介入。
+2. 降级容错：改为调用其他接口，或执行其他操作。
+
+
+
+### 9.3 开发实现
+
+1）两种重试策略：不重试、固定重试时间
+
+```java
+/**
+ * 不重试
+ *
+ * @author zunf
+ * @date 2024/5/22 15:25
+ */
+public class NoRetryStrategy implements RetryStrategy {
+
+    @Override
+    public RpcResponse doRetry(Callable<RpcResponse> callable) throws Exception {
+        return callable.call();
+    }
+}
+```
+
+```java
+/**
+ * 固定间隔时间重试
+ *
+ * @author zunf
+ * @date 2024/5/22 15:32
+ */
+@Slf4j
+public class FixedIntervalRetryStrategy implements RetryStrategy {
+
+    /**
+     * 每隔三秒重试一次
+     */
+    private static final long RETRY_INTERVAL = 3L;
+
+    /**
+     * 最大尝试次数
+     */
+    private static final int MAX_RETRY_TIMES = 3;
+
+    @Override
+    public RpcResponse doRetry(Callable<RpcResponse> callable) throws Exception {
+        Retryer<RpcResponse> retryer = RetryerBuilder.<RpcResponse>newBuilder()
+                //当出现Exception异常时重试
+                .retryIfExceptionOfType(Exception.class)
+                //使用固定时间重试策略，每3秒重试一次
+                .withWaitStrategy(WaitStrategies.fixedWait(RETRY_INTERVAL, TimeUnit.SECONDS))
+                //使用最大重试次数策略，达到3次后停止重试
+                .withStopStrategy(StopStrategies.stopAfterAttempt(MAX_RETRY_TIMES))
+                //添加一个监听器，每次重试都打印日志
+                .withRetryListener(new RetryListener() {
+                    @Override
+                    public <V> void onRetry(Attempt<V> attempt) {
+                        long attemptNumber = attempt.getAttemptNumber();
+                        if (attemptNumber > 1) {
+                            log.warn("远程调用服务失败，正在重试，第{}次...", attemptNumber - 1);
+                        }
+                    }
+                })
+                .build();
+        return retryer.call(callable);
+    }
+}
+```
+
+2）支持SPI、配置化
+
+```Java
+/**
+ * 重试策略工厂
+ *
+ * @author zunf
+ * @date 2024/5/22 15:45
+ */
+public class RetryStrategyFactory {
+
+    static {
+        SpiLoader.load(RetryStrategy.class);
+    }
+
+
+    public static RetryStrategy getInstance(String key) {
+        return SpiLoader.getSpiObject(RetryStrategy.class, key);
+    }
+}
+```
+
+```java
+
+    /**
+     * 重试策略，默认不重试
+     */
+    private String retryStrategy = RetryStrategyKeys.NO;
+```
+
+只需要在消费者的配置文件中配置重试策略
+
+
+
+## 十、容错机制
+
+### 10.1 需求分析
+
+如果达到停止重试的条件，重试停止后，需要一些容错机制，来保证系统仍然可以稳定运行，从而提高系统的健壮性。
+
+在分布式系统中，容错机制十分重要，因为分布式系统中各个组件都可能存在网络故障、节点故障，系统需要具有处理一些偶发异常的能力。
+
+### 10.2 技术方案
+
+#### 10.2.1 容错策略
+
+1）Fail-Fast 快速失败：出现异常时，立刻报错，错误交给外层调用方处理。
+
+2）Fail-Safe 静默处理：出现一些非重要异常时，静默处理，仿佛异常没有发生过一样。
+
+3）Fail-Back 自动恢复：出现异常时，调用其他方法，恢复该功能的正常，可以理解为降级。
+
+4）Fail-Over 故障转移：出现异常时，调用其他节点的方法，也算是一种重试。
+
+#### 10.2.2 容错实现方式
+
+容错是一个比较宽泛的概念，除了上面几种容错策略，还有很多方式可以实现容错，例如：
+
+1. 重试
+2. 限流
+3. 降级
+4. 熔断
+5. 超时中断
+
+#### 10.2.3容错方案设计
+
+如果调用服务失败，先进行重试，如果达到了停止重试的条件，就根据用户设置的容错策略执行。
+
+
+
+### 10.3 开发实现
+
+1）定义上面提到的四种容错策略
+
+```java
+/**
+ * 容错策略-快速失败
+ *
+ * @author zunf
+ * @date 2024/5/22 18:43
+ */
+public class FailFastToleranceStrategy implements ToleranceStrategy {
+
+    @Override
+    public RpcResponse doTolerance(Map<String, Object> context, Exception e) {
+        throw new RuntimeException("调用远程服务报错", e);
+    }
+}
+```
+
+```java
+/**
+ * 容错策略-静默处理
+ *
+ * @author zunf
+ * @date 2024/5/22 18:44
+ */
+@Slf4j
+public class FailSafeToleranceStrategy implements ToleranceStrategy {
+
+    @Override
+    public RpcResponse doTolerance(Map<String, Object> context, Exception e) {
+        //记录一下日志
+        log.error("静默处理异常", e);
+        //返回一个正常的返回值
+        return new RpcResponse();
+    }
+}
+```
+
+```java
+/**
+ * 容错策略-服务降级
+ *
+ * @author zunf
+ * @date 2024/5/22 18:49
+ */
+public class FailBackToleranceStrategy implements ToleranceStrategy {
+
+    @Override
+    public RpcResponse doTolerance(Map<String, Object> context, Exception e) {
+        //搁置一下，还不知道降级成什么服务
+        return null;
+    }
+}
+```
+
+```java
+/**
+ * 容错策略-故障转移
+ *
+ * @author zunf
+ * @date 2024/5/22 18:52
+ */
+public class FailOverToleranceStrategy implements ToleranceStrategy {
+    @Override
+    public RpcResponse doTolerance(Map<String, Object> context, Exception e) {
+        String serviceKey = (String) context.get("serviceKey");
+        String serviceNodeKey = (String) context.get("serviceNodeKey");
+        RpcRequest request = (RpcRequest) context.get("request");
+
+        //获取其他的节点并调用
+        List<ServiceMetaInfo> serviceMetaInfoList = RegistryServiceCache.getCacheByServiceKey(serviceKey);
+        List<ServiceMetaInfo> filterList = serviceMetaInfoList.stream()
+                .filter(serviceMetaInfo ->
+                        !serviceNodeKey.equals(serviceMetaInfo.getServiceNodeKey())).collect(Collectors.toList());
+        if (filterList.isEmpty()) {
+            //如果只有一个节点，直接抛出异常，走快速失败容错策略
+            throw new RuntimeException("调用远程服务报错", e);
+        }
+
+        RpcConfig rpcConfig = RpcApplication.getRpcConfig();
+
+        //直接随便拿一个服务
+        LoadBalancer loadBalancer = new RandomLoadBalancer();
+        ServiceMetaInfo selectedService = loadBalancer.select(null, filterList);
+        //发送请求，重试，报错直接抛出
+        RetryStrategy retryStrategy = RetryStrategyFactory.getInstance(rpcConfig.getRetryStrategy());
+        RpcResponse rpcResponse;
+        try {
+            rpcResponse = retryStrategy.doRetry(() ->
+                    VertxTcpClient.doRequest(selectedService, request, rpcConfig));
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+        return rpcResponse;
+    }
+}
+```
+
+2）支持SPI、策略配置化
+
+```java
+/**
+ * 容错机制对象工厂
+ *
+ * @author zunf
+ * @date 2024/5/22 20:03
+ */
+public class ToleranceStrategyFactory {
+
+    static {
+        SpiLoader.load(ToleranceStrategy.class);
+    }
+
+    public static ToleranceStrategy getInstance(String key) {
+        return SpiLoader.getSpiObject(ToleranceStrategy.class, key);
+    }
+}
+```
+
+```java
+		/**
+     * 容错策略，默认快速失败
+     */
+    private String toleranceStrategy = ToleranceStrategyKeys.FAIL_FAST;
+```
 
 
 

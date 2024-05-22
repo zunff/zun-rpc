@@ -8,6 +8,7 @@ import com.zjh.rpc.model.RpcResponse;
 import com.zjh.rpc.serializer.Serializer;
 import com.zjh.rpc.serializer.SerializerFactory;
 import io.vertx.core.buffer.Buffer;
+import lombok.SneakyThrows;
 
 import java.io.IOException;
 
@@ -19,7 +20,8 @@ import java.io.IOException;
  */
 public class ProtocolMessageDecoder {
 
-    public static ProtocolMessage<?> decode(Buffer buffer) throws IOException {
+    @SneakyThrows
+    public static ProtocolMessage<?> decode(Buffer buffer) {
 
         byte magic = buffer.getByte(0);
 

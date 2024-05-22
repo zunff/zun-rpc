@@ -31,7 +31,7 @@ public class RpcResponse implements Serializable {
     /**
      * 异常信息
      */
-    private Exception exception;
+    private String exceptionClassName;
 
 
     private static final long serialVersionUID = 1L;

@@ -1,4 +1,4 @@
-package com.zjh.rpc.loadbalancer;
+package com.zjh.rpc.constants;
 
 /**
  * 负载均衡器键名常量

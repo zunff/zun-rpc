@@ -1,6 +1,9 @@
 package com.zjh.rpc.config;
 
-import com.zjh.rpc.loadbalancer.LoaderBalancerKeys;
+import com.zjh.rpc.constants.LoaderBalancerKeys;
+import com.zjh.rpc.constants.RetryStrategyKeys;
+import com.zjh.rpc.constants.ToleranceStrategyKeys;
+import com.zjh.rpc.fault.retry.RetryStrategy;
 import lombok.Data;
 
 /**
@@ -49,6 +52,16 @@ public class RpcConfig {
      * 负载均衡器，默认轮询
      */
     private String loadBalancer = LoaderBalancerKeys.ROUND_ROBIN;
+
+    /**
+     * 重试策略，默认不重试
+     */
+    private String retryStrategy = RetryStrategyKeys.NO;
+
+    /**
+     * 容错策略，默认快速失败
+     */
+    private String toleranceStrategy = ToleranceStrategyKeys.FAIL_FAST;
     //end
 
 

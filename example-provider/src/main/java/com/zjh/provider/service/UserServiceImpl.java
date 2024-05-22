@@ -12,6 +12,7 @@ import com.zjh.common.service.UserService;
 public class UserServiceImpl implements UserService {
     @Override
     public User getUser(String name) {
+        int a = 10 / 0;
         return new User(name, 23);
     }
 }

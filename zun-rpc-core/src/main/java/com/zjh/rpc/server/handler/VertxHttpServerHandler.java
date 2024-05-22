@@ -44,7 +44,7 @@ public class VertxHttpServerHandler implements Handler<HttpServerRequest> {
             } catch (IOException e) {
                 e.printStackTrace();
                 rpcResponse.setMessage(e.getMessage());
-                rpcResponse.setException(e);
+                rpcResponse.setExceptionClassName(e.getClass().getName());
             }
 
 
@@ -66,7 +66,7 @@ public class VertxHttpServerHandler implements Handler<HttpServerRequest> {
             } catch (Exception e) {
                 e.printStackTrace();
                 rpcResponse.setMessage(e.getMessage());
-                rpcResponse.setException(e);
+                rpcResponse.setExceptionClassName(e.getClass().getName());
             }
 
             //响应

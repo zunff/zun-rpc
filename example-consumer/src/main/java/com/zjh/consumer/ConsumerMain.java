@@ -26,18 +26,18 @@ public class ConsumerMain {
             System.out.println(user);
         }
 
-        user = userService.getUser("ZunF2");
-        if (user == null) {
-            System.out.println("user == null");
-        } else {
-            System.out.println(user);
-        }
-
-        user = userService.getUser("ZunF3");
-        if (user == null) {
-            System.out.println("user == null");
-        } else {
-            System.out.println(user);
-        }
+//        user = userService.getUser("ZunF2");
+//        if (user == null) {
+//            System.out.println("user == null");
+//        } else {
+//            System.out.println(user);
+//        }
+//
+//        user = userService.getUser("ZunF3");
+//        if (user == null) {
+//            System.out.println("user == null");
+//        } else {
+//            System.out.println(user);
+//        }
     }
 }

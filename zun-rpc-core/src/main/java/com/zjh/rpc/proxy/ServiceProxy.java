@@ -4,8 +4,13 @@ import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
 import com.zjh.rpc.RpcApplication;
 import com.zjh.rpc.config.RpcConfig;
+import com.zjh.rpc.enums.MessageStatusEnums;
 import com.zjh.rpc.enums.MessageTypeEnums;
 import com.zjh.rpc.enums.SerializerEnums;
+import com.zjh.rpc.fault.retry.RetryStrategy;
+import com.zjh.rpc.fault.retry.RetryStrategyFactory;
+import com.zjh.rpc.fault.tolerance.ToleranceStrategy;
+import com.zjh.rpc.fault.tolerance.ToleranceStrategyFactory;
 import com.zjh.rpc.loadbalancer.LoadBalancer;
 import com.zjh.rpc.loadbalancer.LoadBalancerFactory;
 import com.zjh.rpc.model.RpcRequest;
@@ -19,10 +24,12 @@ import com.zjh.rpc.registry.Registry;
 import com.zjh.rpc.registry.RegistryFactory;
 import com.zjh.rpc.serializer.Serializer;
 import com.zjh.rpc.serializer.SerializerFactory;
+import com.zjh.rpc.server.client.VertxTcpClient;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetSocket;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -42,8 +49,9 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 public class ServiceProxy implements InvocationHandler {
 
+    @SneakyThrows
     @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    public Object invoke(Object proxy, Method method, Object[] args) {
         //构造请求参数
         String serviceName = method.getDeclaringClass().getName();
         RpcRequest request = RpcRequest.builder()
@@ -53,93 +61,40 @@ public class ServiceProxy implements InvocationHandler {
                 .params(args)
                 .build();
 
-        try {
-            //获取服务提供者地址
-            String registryType = RpcApplication.getRpcConfig().getRegistryConfig().getType();
-            Registry registry = RegistryFactory.getInstance(registryType);
-            ServiceMetaInfo serviceMetaInfo = new ServiceMetaInfo();
-            serviceMetaInfo.setServiceName(serviceName);
-            List<ServiceMetaInfo> serviceList = registry.discover(serviceMetaInfo.getServiceKey());
+        //获取服务提供者地址
+        String registryType = RpcApplication.getRpcConfig().getRegistryConfig().getType();
+        Registry registry = RegistryFactory.getInstance(registryType);
+        ServiceMetaInfo serviceMetaInfo = new ServiceMetaInfo();
+        serviceMetaInfo.setServiceName(serviceName);
+        List<ServiceMetaInfo> serviceList = registry.discover(serviceMetaInfo.getServiceKey());
 
-            RpcConfig rpcConfig = RpcApplication.getRpcConfig();
-            //负载均衡
-            LoadBalancer loadBalancer = LoadBalancerFactory.getInstance(rpcConfig.getLoadBalancer());
-            //将调用方法名作为负载均衡参数
-            Map<String, Object> params = new HashMap<>();
-            params.put("methodName", request.getMethodName());
-            //获取负载均衡算法选出的服务
-            serviceMetaInfo = loadBalancer.select(params, serviceList);
-            //发送请求
-            return invokeByTcp(serviceMetaInfo, request, rpcConfig);
+        RpcConfig rpcConfig = RpcApplication.getRpcConfig();
 
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        return null;
-    }
-
-    private Object invokeByTcp(ServiceMetaInfo serviceMetaInfo, RpcRequest request, RpcConfig rpcConfig) throws Exception {
+        //负载均衡
+        LoadBalancer loadBalancer = LoadBalancerFactory.getInstance(rpcConfig.getLoadBalancer());
+        //将调用方法名作为负载均衡参数
+        Map<String, Object> params = new HashMap<>(5);
+        params.put("methodName", request.getMethodName());
+        //获取负载均衡算法选出的服务
+        ServiceMetaInfo selectedService = loadBalancer.select(params, serviceList);
+        //发送请求，使用重试策略
         RpcResponse rpcResponse = null;
-        Vertx vertx = Vertx.vertx();
-        NetClient netClient = vertx.createNetClient();
-        CompletableFuture<RpcResponse> completableFuture = new CompletableFuture<>();
-        //建立链接
-        netClient.connect(serviceMetaInfo.getPort(), serviceMetaInfo.getHost(), result -> {
-            if (result.succeeded()) {
-                NetSocket netSocket = result.result();
-                ProtocolMessage.Header header = new ProtocolMessage.Header();
+       try {
+           RetryStrategy retryStrategy = RetryStrategyFactory.getInstance(rpcConfig.getRetryStrategy());
+           rpcResponse = retryStrategy.doRetry(() ->
+                   VertxTcpClient.doRequest(selectedService, request, rpcConfig));
+           return rpcResponse.getData();
+       } catch (Exception e) {
+           log.warn("重试结束，启动容错机制...");
+           //容错机制
+           ToleranceStrategy toleranceStrategy = ToleranceStrategyFactory.getInstance(rpcConfig.getToleranceStrategy());
+           Map<String, Object> context = new HashMap<>();
+           context.put("serviceKey", selectedService.getServiceKey());
+           context.put("serviceNodeKey", selectedService.getServiceNodeKey());
+           context.put("request", request);
+           rpcResponse = toleranceStrategy.doTolerance(context, e);
+       }
 
-                SerializerEnums serializerEnums = SerializerEnums.of(rpcConfig.getSerializer());
-                if (serializerEnums == null) {
-                    throw new RuntimeException("序列化器类型不存在");
-                }
-
-                header.setSerializer((byte) serializerEnums.getType());
-                header.setType((byte) MessageTypeEnums.REQUEST.getType());
-
-                //发送请求
-                ProtocolMessage<RpcRequest> protocolMessage = new ProtocolMessage<>(header, request);
-                try {
-                    Buffer encode = ProtocolMessageEncoder.encode(protocolMessage);
-                    netSocket.write(encode);
-                } catch (IOException e) {
-                    throw new RuntimeException("协议消息编码错误" + e);
-                }
-                //接收响应，使用自己封装的装饰者模式加强过的能够处理半包、粘包的Handler
-                netSocket.handler(new TcpBufferHandlerWrapper(buffer -> {
-                    try {
-                        ProtocolMessage<?> decode = ProtocolMessageDecoder.decode(buffer);
-                        completableFuture.complete((RpcResponse) decode.getBody());
-                    } catch (IOException e) {
-                        throw new RuntimeException("协议消息解码错误" + e);
-                    }
-                }));
-            } else {
-                log.error("Fail to connect to server", result.cause());
-            }
-        });
-        //阻塞，等到拿到类结构再往下执行
-        rpcResponse = completableFuture.get();
-        //关闭链接
-        netClient.close();
-        return rpcResponse.getData();
-    }
-
-    private Object invokeByHttp(ServiceMetaInfo serviceMetaInfo, RpcRequest request, RpcConfig rpcConfig) throws IOException {
-        //序列化body
-        Serializer serializer = SerializerFactory.getInstance(rpcConfig.getSerializer());
-        byte[] bytes = serializer.serialize(request);
-
-        try (HttpResponse httpResponse = HttpRequest
-                .post(serviceMetaInfo.getServiceAddress())
-                .body(bytes).execute()) {
-
-            //处理接口执行结果并返回
-            byte[] result = httpResponse.bodyBytes();
-            //反序列化
-            RpcResponse rpcResponse = serializer.deserialize(result, RpcResponse.class);
-            return rpcResponse.getData();
-        }
+       return rpcResponse;
     }
 }
