@@ -79,22 +79,22 @@ public class ServiceProxy implements InvocationHandler {
         ServiceMetaInfo selectedService = loadBalancer.select(params, serviceList);
         //发送请求，使用重试策略
         RpcResponse rpcResponse = null;
-       try {
-           RetryStrategy retryStrategy = RetryStrategyFactory.getInstance(rpcConfig.getRetryStrategy());
-           rpcResponse = retryStrategy.doRetry(() ->
-                   VertxTcpClient.doRequest(selectedService, request, rpcConfig));
-           return rpcResponse.getData();
-       } catch (Exception e) {
-           log.warn("重试结束，启动容错机制...");
-           //容错机制
-           ToleranceStrategy toleranceStrategy = ToleranceStrategyFactory.getInstance(rpcConfig.getToleranceStrategy());
-           Map<String, Object> context = new HashMap<>();
-           context.put("serviceKey", selectedService.getServiceKey());
-           context.put("serviceNodeKey", selectedService.getServiceNodeKey());
-           context.put("request", request);
-           rpcResponse = toleranceStrategy.doTolerance(context, e);
-       }
+        try {
+            RetryStrategy retryStrategy = RetryStrategyFactory.getInstance(rpcConfig.getRetryStrategy());
+            rpcResponse = retryStrategy.doRetry(() ->
+                    VertxTcpClient.doRequest(selectedService, request, rpcConfig));
+            return rpcResponse.getData();
+        } catch (Exception e) {
+            log.warn("重试结束，启动容错机制...");
+            //容错机制
+            ToleranceStrategy toleranceStrategy = ToleranceStrategyFactory.getInstance(rpcConfig.getToleranceStrategy());
+            Map<String, Object> context = new HashMap<>();
+            context.put("serviceKey", selectedService.getServiceKey());
+            context.put("serviceNodeKey", selectedService.getServiceNodeKey());
+            context.put("request", request);
+            rpcResponse = toleranceStrategy.doTolerance(context, e);
+        }
 
-       return rpcResponse;
+        return rpcResponse;
     }
 }
