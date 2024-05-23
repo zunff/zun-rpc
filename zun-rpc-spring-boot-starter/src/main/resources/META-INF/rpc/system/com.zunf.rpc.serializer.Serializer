@@ -1,0 +1,5 @@
+jdk=com.zunf.rpc.serializer.impl.JdkSerializer
+json=com.zunf.rpc.serializer.impl.JsonSerializer
+hessian=com.zunf.rpc.serializer.impl.HessianSerializer
+kryo=com.zunf.rpc.serializer.impl.KryoSerializer
+

@@ -6,6 +6,7 @@
     <artifactId>zun-rpc</artifactId>
     <packaging>pom</packaging>
     <modules>
+        <module>zun-rpc-spring-boot-starter</module>
         <module>zun-rpc-core</module>
         <module>zun-rpc-easy</module>
         <module>example-common</module>

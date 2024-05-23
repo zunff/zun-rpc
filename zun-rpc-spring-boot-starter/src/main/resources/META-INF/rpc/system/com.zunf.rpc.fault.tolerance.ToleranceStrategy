@@ -1,0 +1,4 @@
+failFast=com.zunf.rpc.fault.tolerance.impl.FailFastToleranceStrategy
+failSafe=com.zunf.rpc.fault.tolerance.impl.FailSafeToleranceStrategy
+failBack=com.zunf.rpc.fault.tolerance.impl.FailBackToleranceStrategy
+failOver=com.zunf.rpc.fault.tolerance.impl.FailOverToleranceStrategy

@@ -2,6 +2,8 @@ package com.zjh.consumer;
 
 import com.zjh.common.model.User;
 import com.zjh.common.service.UserService;
+import com.zjh.rpc.RpcApplication;
+import com.zjh.rpc.bootstrap.ConsumerBootStrap;
 import com.zjh.rpc.proxy.ServiceProxyFactory;
 
 import java.util.HashMap;
@@ -15,6 +17,8 @@ import java.util.Map;
  */
 public class ConsumerMain {
     public static void main(String[] args) {
+
+        ConsumerBootStrap.init();
 
         //获取UserServiceImpl示例
         UserService userService = ServiceProxyFactory.getProxy(UserService.class);

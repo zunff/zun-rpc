@@ -1826,6 +1826,53 @@ public class ToleranceStrategyFactory {
 
 
 
+## 十一、SpringBootStarter改造
+
+### 11.1 定义注解
+
+1. @EnableZunRpc：rpc框架初始化，标识在SpringBoot启动类中
+2. @ZunRpcService：rpc 服务注册，标识在服务提供者的Service实例中，组合@Service注解，如果应用程序中没有@EnableZunRpc注解，失效
+3. @ZunRpcReference：在消费者中使用，用于声明远程调用服务引用，标识在需要远程调用的实例之上，如果应用程序中没有@EnableZunRpc注解，失效
+
+
+
+### 11.2 注解驱动
+
+**首先介绍一下两个接口：**
+
+1. **ImportBeanDefinitionRegistrar**：这个接口有一个`registerBeanDefinitions`方法，在**Spring IOC 容器启动时**调用，作用是在Spring IOC 容器中动态注册bean
+2. **BeanPostProcessor**：这个接口有两个方法`postProcessBeforeInitialization`和`postProcessAfterInitialization`，分别在**对象注册进 IOC 容器前、注册进 IOC容器后调用**，作用是在bean的生命周期中插入自定义逻辑。
+
+**驱动设计：**
+
+1. RpcInitBootstrap：实现ImportBeanDefinitionRegistrar接口，在这个类里，要初始化RPC框架、读取配置文件（后续可以将RpcConfig存入IOC容器里）
+2. RpcProviderBootstrap：在postProcessAfterInitialization方法里，将服务注册进注册中心，这里注册的端口是Web服务器启动的端口，而不是SpringBoot启动的端口、启动Web服务器，如果没有这个注解，就不启动Web服务器
+3. RpcConsumerBootstrap：在postProcessAfterInitialization方法里，利用反射机制获取所有的字段，如果某个字段标识了@ZunRpcReference注解，就生成代理对象注入到这个属性中。
+
+**改造：**
+
+1. 服务提供者的监听接口服务中，将原先的反射创建对象，改为从IOC容器获取对象，但调用方法还是用的反射机制
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

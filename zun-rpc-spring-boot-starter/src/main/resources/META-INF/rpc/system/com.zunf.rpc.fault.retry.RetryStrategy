@@ -1,0 +1,2 @@
+no=com.zunf.rpc.fault.retry.impl.NoRetryStrategy
+fixedInterval=com.zunf.rpc.fault.retry.impl.FixedIntervalRetryStrategy

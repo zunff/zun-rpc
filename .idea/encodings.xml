@@ -7,9 +7,15 @@
     <file url="file://$PROJECT_DIR$/example-consumer/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/example-provider/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/example-provider/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/example-spring-boot-consumer/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/example-spring-boot-consumer/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/example-spring-boot-provider/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/example-spring-boot-provider/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/zun-rpc-easy/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/zun-rpc-easy/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/zun-rpc-spring-boot-starter/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/zun-rpc-spring-boot-starter/src/main/resources" charset="UTF-8" />
   </component>
 </project>

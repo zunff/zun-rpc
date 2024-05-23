@@ -1,0 +1,3 @@
+roundRobin=com.zunf.rpc.loadbalancer.impl.RoundRobinLoadBalancer
+random=com.zunf.rpc.loadbalancer.impl.RandomLoadBalancer
+consistentHash=com.zunf.rpc.loadbalancer.impl.ConsistentHashLoadBalancer
