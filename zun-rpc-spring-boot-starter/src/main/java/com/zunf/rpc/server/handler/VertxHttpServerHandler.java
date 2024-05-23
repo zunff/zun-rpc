@@ -1,11 +1,12 @@
 package com.zunf.rpc.server.handler;
 
+import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.model.RpcRequest;
 import com.zunf.rpc.model.RpcResponse;
-import com.zunf.rpc.RpcApplication;
 import com.zunf.rpc.registry.LocalRegistry;
 import com.zunf.rpc.serializer.Serializer;
 import com.zunf.rpc.serializer.SerializerFactory;
+import com.zunf.rpc.utils.SpringContextUtil;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServerRequest;
@@ -31,7 +32,7 @@ public class VertxHttpServerHandler implements Handler<HttpServerRequest> {
         log.info("Received request: {}  {}", request.uri(), request.method());
 
         //创建序列化器
-        Serializer serializer = SerializerFactory.getInstance(RpcApplication.getRpcConfig().getSerializer());
+        Serializer serializer = SerializerFactory.getInstance(SpringContextUtil.getBean(RpcConfig.class).getSerializer());
 
         //异步处理 Http 请求
         request.bodyHandler(body -> {

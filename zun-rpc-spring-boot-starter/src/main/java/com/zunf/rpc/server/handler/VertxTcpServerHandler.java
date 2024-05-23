@@ -1,7 +1,7 @@
 package com.zunf.rpc.server.handler;
 
 
-import com.zunf.rpc.RpcApplication;
+import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.enums.MessageStatusEnums;
 import com.zunf.rpc.enums.MessageTypeEnums;
 import com.zunf.rpc.enums.SerializerEnums;
@@ -36,7 +36,7 @@ public class VertxTcpServerHandler implements Handler<NetSocket> {
 
             ProtocolMessage.Header header = new ProtocolMessage.Header();
 
-            SerializerEnums serializerEnums = SerializerEnums.of(RpcApplication.getRpcConfig().getSerializer());
+            SerializerEnums serializerEnums = SerializerEnums.of(SpringContextUtil.getBean(RpcConfig.class).getSerializer());
             if (serializerEnums == null) {
                 throw new RuntimeException("序列化器不存在");
             }

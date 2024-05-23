@@ -1,6 +1,5 @@
 package com.zunf.rpc.fault.tolerance.impl;
 
-import com.zunf.rpc.RpcApplication;
 import com.zunf.rpc.registry.RegistryServiceCache;
 import com.zunf.rpc.server.client.VertxTcpClient;
 import com.zunf.rpc.config.RpcConfig;
@@ -12,6 +11,7 @@ import com.zunf.rpc.loadbalancer.impl.RandomLoadBalancer;
 import com.zunf.rpc.model.RpcRequest;
 import com.zunf.rpc.model.RpcResponse;
 import com.zunf.rpc.model.ServiceMetaInfo;
+import com.zunf.rpc.utils.SpringContextUtil;
 
 import java.util.List;
 import java.util.Map;
@@ -40,7 +40,7 @@ public class FailOverToleranceStrategy implements ToleranceStrategy {
             throw new RuntimeException("调用远程服务报错", e);
         }
 
-        RpcConfig rpcConfig = RpcApplication.getRpcConfig();
+        RpcConfig rpcConfig = SpringContextUtil.getBean(RpcConfig.class);
 
         //直接随便拿一个服务
         LoadBalancer loadBalancer = new RandomLoadBalancer();

@@ -1,9 +1,5 @@
 package com.zunf.rpc.proxy;
 
-import com.zunf.rpc.RpcApplication;
-import com.zunf.rpc.registry.Registry;
-import com.zunf.rpc.registry.RegistryFactory;
-import com.zunf.rpc.server.client.VertxTcpClient;
 import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.fault.retry.RetryStrategy;
 import com.zunf.rpc.fault.retry.RetryStrategyFactory;
@@ -14,6 +10,10 @@ import com.zunf.rpc.loadbalancer.LoadBalancerFactory;
 import com.zunf.rpc.model.RpcRequest;
 import com.zunf.rpc.model.RpcResponse;
 import com.zunf.rpc.model.ServiceMetaInfo;
+import com.zunf.rpc.registry.Registry;
+import com.zunf.rpc.registry.RegistryFactory;
+import com.zunf.rpc.server.client.VertxTcpClient;
+import com.zunf.rpc.utils.SpringContextUtil;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
@@ -45,13 +45,12 @@ public class ServiceProxy implements InvocationHandler {
                 .build();
 
         //获取服务提供者地址
-        String registryType = RpcApplication.getRpcConfig().getRegistryConfig().getType();
+        RpcConfig rpcConfig = SpringContextUtil.getBean(RpcConfig.class);
+        String registryType = rpcConfig.getRegistryConfig().getType();
         Registry registry = RegistryFactory.getInstance(registryType);
         ServiceMetaInfo serviceMetaInfo = new ServiceMetaInfo();
         serviceMetaInfo.setServiceName(serviceName);
         List<ServiceMetaInfo> serviceList = registry.discover(serviceMetaInfo.getServiceKey());
-
-        RpcConfig rpcConfig = RpcApplication.getRpcConfig();
 
         //负载均衡
         LoadBalancer loadBalancer = LoadBalancerFactory.getInstance(rpcConfig.getLoadBalancer());

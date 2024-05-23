@@ -1830,9 +1830,89 @@ public class ToleranceStrategyFactory {
 
 ### 11.1 定义注解
 
-1. @EnableZunRpc：rpc框架初始化，标识在SpringBoot启动类中
-2. @ZunRpcService：rpc 服务注册，标识在服务提供者的Service实例中，组合@Service注解，如果应用程序中没有@EnableZunRpc注解，失效
-3. @ZunRpcReference：在消费者中使用，用于声明远程调用服务引用，标识在需要远程调用的实例之上，如果应用程序中没有@EnableZunRpc注解，失效
+**@Target()可传参数：**
+
+1. ElementType.TYPE：可以用于类、接口和枚举类型。
+2. ElementType.FIELD：可以用于字段（包括枚举常量）。
+3. ElementType.METHOD：可以用于方法。
+4. ElementType.PARAMETER：可以用于方法的参数。
+5. ElementType.CONSTRUCTOR：可以用于构造函数。
+6. ElementType.LOCAL_VARIABLE：可以用于局部变量。
+7. ElementType.ANNOTATION_TYPE：可以用于注解类型。
+8. ElementType.PACKAGE：可以用于包。
+9. ElementType.TYPE_PARAMETER：可以用于类型参数声明（Java 8新增）。
+10. ElementType.TYPE_USE：可以用于使用类型的任何语句中（Java 8新增）。
+
+
+
+**@Retention()可传参数：**
+
+1. RetentionPolicy.SOURCE：注解只保留在源文件，当Java文件编译成class文件的时候，注解被遗弃；
+2. RetentionPolicy.CLASS：注解被保留到class文件，但jvm加载class文件时候被遗弃，这是默认的生命周期；
+3. RetentionPolicy.RUNTIME：注解不仅被保存到class文件中，jvm加载class文件之后，仍然存在；
+
+
+
+**设计：**
+
+1）@EnableZunRpc：rpc框架初始化，标识在SpringBoot启动类中
+
+```java
+
+/**
+ * 启用 Rpc 注解
+ *
+ * @author zunf
+ * @date 2024/5/23 14:52
+ */
+@Target(ElementType.TYPE) //表示此注解只能用来标识类
+@Retention(RetentionPolicy.RUNTIME) //表示转为字节码后，注解仍然存在
+@Import({SpringContextUtil.class, RpcInitBootStrap.class, RpcProviderBootStrap.class, RpcConsumerBootStrap.class})//引入一下注解驱动
+public @interface EnableZunRpc {
+
+}
+```
+
+2）@ZunRpcService：rpc 服务注册，标识在服务提供者的Service实例中，组合@Service注解，如果应用程序中没有@EnableZunRpc注解，失效
+
+```java
+/**
+ * 服务提供者注解（用于服务注册）
+ *
+ * @author zunf
+ * @date 2024/5/23 14:55
+ */
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Component
+public @interface ZunRpcService {
+
+    /**
+     * 服务接口类
+     */
+    Class<?> interfaceClass() default void.class;
+}
+```
+
+3）@ZunRpcReference：在消费者中使用，用于声明远程调用服务引用，标识在需要远程调用的实例之上，如果应用程序中没有@EnableZunRpc注解，失效
+
+```java
+/**
+ * 服务消费者注解（用于注入服务）
+ *
+ * @author zunf
+ * @date 2024/5/23 14:57
+ */
+@Target(ElementType.FIELD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface ZunRpcReference {
+
+    /**
+     * 服务接口类
+     */
+    Class<?> interfaceClass() default void.class;
+}
+```
 
 
 
@@ -1845,15 +1925,248 @@ public class ToleranceStrategyFactory {
 
 **驱动设计：**
 
-1. RpcInitBootstrap：实现ImportBeanDefinitionRegistrar接口，在这个类里，要初始化RPC框架、读取配置文件（后续可以将RpcConfig存入IOC容器里）
-2. RpcProviderBootstrap：在postProcessAfterInitialization方法里，将服务注册进注册中心，这里注册的端口是Web服务器启动的端口，而不是SpringBoot启动的端口、启动Web服务器，如果没有这个注解，就不启动Web服务器
-3. RpcConsumerBootstrap：在postProcessAfterInitialization方法里，利用反射机制获取所有的字段，如果某个字段标识了@ZunRpcReference注解，就生成代理对象注入到这个属性中。
+1）RpcInitBootstrap：实现ImportBeanDefinitionRegistrar接口，在这个类里，要初始化RPC框架、读取配置文件（后续可以将RpcConfig存入IOC容器里）
+
+```java
+/**
+ * ZunRpc框架启动
+ *
+ * @author zunf
+ * @date 2024/5/23 14:00
+ */
+@Slf4j
+public class RpcInitBootStrap implements ImportBeanDefinitionRegistrar {
+
+    /**
+     * Spring IOC 容器初始化时调用
+     *
+     * @param importingClassMetadata 导入的类的元信息
+     * @param beanDefinitionRegistry 注册器，用于注册对象
+     */
+    @Override
+    public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry beanDefinitionRegistry) {
+        // 初始化配置和注册中心，并将RpcConfig注册进IOC
+        RpcConfig rpcConfig;
+        //读取配置对象
+        try {
+            rpcConfig = ConfigUtils.loadConfig(RpcConfig.class, RpcConstants.CONFIG_PREFIX);
+            rpcConfig.setRegistryConfig(ConfigUtils.loadConfig(RegistryConfig.class, RpcConstants.REGISTRY_CONFIG_PREFIX));
+            //注册进IOC
+            GenericBeanDefinition beanDefinition = new GenericBeanDefinition();
+            beanDefinition.setBeanClass(RpcConfig.class);
+            RpcConfig finalRpcConfig = rpcConfig;
+            beanDefinition.setInstanceSupplier(() -> finalRpcConfig);
+
+            beanDefinitionRegistry.registerBeanDefinition("rpcConfig", beanDefinition);
+
+        } catch (Exception e) {
+            //配置初始化失败，使用默认值
+            rpcConfig = new RpcConfig();
+            log.error("rpc init config error, using default config");
+        }
+
+        //注册中心初始化
+        RegistryConfig registryConfig = rpcConfig.getRegistryConfig();
+        Registry registry = RegistryFactory.getInstance(registryConfig.getType());
+        registry.init(registryConfig);
+        log.info("rpc init config = {}", registry);
+        //初始化结束后，创建 ShutdownHook ,JVM退出时执行
+        Runtime.getRuntime().addShutdownHook(new Thread(registry::destroy));
+    }
+}
+```
+
+2）RpcProviderBootstrap：在postProcessAfterInitialization方法里，将服务注册进注册中心，这里注册的端口是Web服务器启动的端口，而不是SpringBoot启动的端口、启动Web服务器，如果没有这个注解，就不启动Web服务器
+
+```java
+/**
+ * 服务提供者驱动
+ *
+ * @author zunf
+ * @date 2024/5/23 15:33
+ */
+public class RpcProviderBootStrap implements BeanPostProcessor, ApplicationContextAware {
+
+    private ApplicationContext applicationContext;
+
+    private boolean webServerIsStarted = false;
+
+    @Override
+    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+
+        Class<?> beanClass = bean.getClass();
+        ZunRpcService zunRpcService = beanClass.getAnnotation(ZunRpcService.class);
+        if (zunRpcService != null) {
+            //1.类标识了我们的注解，将服务注册到注册中心
+            //因为这个方法调用时正在构建IOC容器，所以无法从我们封装的工具类中获取RpcConfig
+            RpcConfig rpcConfig = applicationContext.getBean(RpcConfig.class);;
+
+            Class<?> interfaceClass = zunRpcService.interfaceClass();
+            //没有指定，就自己获取实现接口的第一个
+            if (interfaceClass == void.class) {
+                interfaceClass = beanClass.getInterfaces()[0];
+            }
+            String serviceName = interfaceClass.getName();
+
+            ServiceMetaInfo serviceMetaInfo = new ServiceMetaInfo();
+            serviceMetaInfo.setServiceName(serviceName);
+            serviceMetaInfo.setHost(rpcConfig.getServerHost());
+            serviceMetaInfo.setPort(rpcConfig.getServerPort());
+
+            Registry registry = RegistryFactory.getInstance(rpcConfig.getRegistryConfig().getType());
+            try {
+                registry.register(serviceMetaInfo);
+            } catch (Exception e) {
+                throw new RuntimeException(serviceName + "注册到服务中心时失败：" + e);
+            }
+
+            //2.注册到本地注册器，因为传过来的是接口名称（UserService），需要映射为Class对象
+            LocalRegistry.register(serviceName, beanClass);
+
+            //3.如果没有启动Web服务器，启动
+            if (!webServerIsStarted) {
+                WebServer webServer = new VertxTcpServer();
+                webServer.doStart(rpcConfig.getServerPort());
+                webServerIsStarted = true;
+            }
+        }
+
+        return BeanPostProcessor.super.postProcessAfterInitialization(bean, beanName);
+    }
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.applicationContext = applicationContext;
+    }
+}
+```
+
+3）RpcConsumerBootstrap：在postProcessAfterInitialization方法里，利用反射机制获取所有的字段，如果某个字段标识了@ZunRpcReference注解，就生成代理对象注入到这个属性中。
+
+```java
+/**
+ * Rpc消费者驱动
+ *
+ * @author zunf
+ * @date 2024/5/23 16:02
+ */
+public class RpcConsumerBootStrap implements BeanPostProcessor, ApplicationContextAware {
+
+    private ApplicationContext applicationContext;
+
+    /**
+     * Bean 初始化后执行，注入代理对象依赖
+     * @param bean
+     * @param beanName
+     * @return
+     * @throws BeansException
+     */
+    @Override
+    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        Class<?> beanClass = bean.getClass();
+        Field[] fields = beanClass.getDeclaredFields();
+        for (Field field : fields) {
+            ZunRpcReference zunRpcReference = field.getAnnotation(ZunRpcReference.class);
+            if (zunRpcReference != null) {
+                //字段标识了这个注解，说明需要注入代理对象
+                Class<?> interfaceClass = zunRpcReference.interfaceClass();
+                //如果没有设置，获取字段的类
+                if (interfaceClass == void.class) {
+                    interfaceClass = field.getType();
+                }
+                //注入代理对象
+                //因为这个方法调用时正在构建IOC容器，所以无法从我们封装的工具类中获取RpcConfig
+                Object proxyObject = ServiceProxyFactory.getProxy(interfaceClass, applicationContext.getBean(RpcConfig.class));
+                field.setAccessible(true);
+
+                try {
+                    field.set(bean, proxyObject);
+                    field.setAccessible(false);
+                } catch (IllegalAccessException e) {
+                    throw new RuntimeException("为对象注册代理对象失败" + e);
+                }
+
+            }
+        }
+
+
+        return BeanPostProcessor.super.postProcessAfterInitialization(bean, beanName);
+    }
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.applicationContext = applicationContext;
+    }
+}
+```
 
 **改造：**
 
-1. 服务提供者的监听接口服务中，将原先的反射创建对象，改为从IOC容器获取对象，但调用方法还是用的反射机制
+1）定义一个Spring IOC 工具类，用于获取IOC对象，在@EnableZunRpc中使用@Import引入，但是在注解驱动中，因为还在容器初始化阶段，并不会往这个类注入上下文，所以需要他们自己获取
 
+```java
+/**
+ * Spring上下文工具类
+ *
+ * @author zunf
+ * @date 2024/5/23 17:49
+ */
+@NoArgsConstructor
+public class SpringContextUtil implements ApplicationContextAware {
 
+    /**
+     *  获取上下文
+     */
+    @Getter
+    private static ApplicationContext applicationContext;
+
+    /**
+     * 设置上下文
+     * @param applicationContext
+     * @throws BeansException
+     */
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        if (SpringContextUtil.applicationContext == null) {
+            SpringContextUtil.applicationContext = applicationContext;
+        }
+
+    }
+
+    /**
+     * 通过名字获取上下文中的bean
+     * @param name
+     * @return
+     */
+    public static Object getBean(String name){
+        return applicationContext.getBean(name);
+    }
+
+    /**
+     * 通过类型获取上下文中的bean
+     * @param requiredType
+     * @return
+     */
+    public static<T> T getBean(Class<T> requiredType){
+        return applicationContext.getBean(requiredType);
+    }
+}
+
+```
+
+2）服务提供者的监听接口的处理器中，将原先的反射创建对象，改为从IOC容器获取对象，但调用方法还是用的反射机制
+
+```java
+       Class<?> serviceClass = LocalRegistry.get(rpcRequest.getServiceName());
+        if (serviceClass == null) {
+            throw new RuntimeException("不存在此服务" + rpcRequest.getServiceName());
+        }
+        Method method = serviceClass.getMethod(rpcRequest.getMethodName(), rpcRequest.getParamTypes());
+        //从IOC容器中获取对象
+        Object bean = SpringContextUtil.getBean(serviceClass);
+        //调用方法
+        Object result = method.invoke(bean, rpcRequest.getParams());
+```
 
 
 

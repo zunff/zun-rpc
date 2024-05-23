@@ -3,7 +3,9 @@ package com.zunf.rpc.config;
 import com.zunf.rpc.constants.LoaderBalancerKeys;
 import com.zunf.rpc.constants.RetryStrategyKeys;
 import com.zunf.rpc.constants.ToleranceStrategyKeys;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * 服务提供者配置
@@ -12,6 +14,8 @@ import lombok.Data;
  * @date 2024/5/6 10:48
  */
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
 public class RpcConfig {
 
     //consumer、provider 通用配置 begin

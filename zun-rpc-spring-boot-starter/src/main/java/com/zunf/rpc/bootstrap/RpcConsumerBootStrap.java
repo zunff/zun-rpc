@@ -1,9 +1,12 @@
 package com.zunf.rpc.bootstrap;
 
+import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.proxy.ServiceProxyFactory;
 import com.zunf.rpc.annotation.ZunRpcReference;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 
 import java.lang.reflect.Field;
 
@@ -13,7 +16,9 @@ import java.lang.reflect.Field;
  * @author zunf
  * @date 2024/5/23 16:02
  */
-public class RpcConsumerBootStrap implements BeanPostProcessor {
+public class RpcConsumerBootStrap implements BeanPostProcessor, ApplicationContextAware {
+
+    private ApplicationContext applicationContext;
 
     /**
      * Bean 初始化后执行，注入代理对象依赖
@@ -36,7 +41,8 @@ public class RpcConsumerBootStrap implements BeanPostProcessor {
                     interfaceClass = field.getType();
                 }
                 //注入代理对象
-                Object proxyObject = ServiceProxyFactory.getProxy(interfaceClass);
+                //因为这个方法调用时正在构建IOC容器，所以无法从我们封装的工具类中获取RpcConfig
+                Object proxyObject = ServiceProxyFactory.getProxy(interfaceClass, applicationContext.getBean(RpcConfig.class));
                 field.setAccessible(true);
 
                 try {
@@ -51,5 +57,10 @@ public class RpcConsumerBootStrap implements BeanPostProcessor {
 
 
         return BeanPostProcessor.super.postProcessAfterInitialization(bean, beanName);
+    }
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.applicationContext = applicationContext;
     }
 }
