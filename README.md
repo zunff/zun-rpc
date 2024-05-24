@@ -2170,13 +2170,103 @@ public class SpringContextUtil implements ApplicationContextAware {
 
 
 
+## 十二、优化
+
+#### 控制台WARNING优化
+
+```ABAP
+WARNING: An illegal reflective access operation has occurred
+WARNING: Illegal reflective access by com.esotericsoftware.reflectasm.AccessClassLoader (file:/Library/maven/repo/com/esotericsoftware/reflectasm/1.11.9/reflectasm-1.11.9.jar) to method java.lang.ClassLoader.defineClass(java.lang.String,byte[],int,int,java.security.ProtectionDomain)
+WARNING: Please consider reporting this to the maintainers of com.esotericsoftware.reflectasm.AccessClassLoader
+WARNING: Use --illegal-access=warn to enable warnings of further illegal reflective access operations
+WARNING: All illegal access operations will be denied in a future release
+```
+
+- 这是由于依赖了kryo的包，他的包里用的反射直接访问的私有成员，导致了警告
+- 从 JDK9 开始，对于非公有的成员、成员方法和构造方法，模块不能通过反射直接去访问，但是JDK9提供了一个可选的修饰符open来声明一个开放模块，可以从一个开放模块中导出所有的包，以便在运行时对该模块中的所有包中的所有类型进行深层反射来访问。
+- 解决起来有点麻烦，就放着吧哈哈哈哈
 
 
 
+#### 读取YAML文件
+
+> 我用的方案是使用Spring自带的SPI机制，来读取YAML文件
+
+1）为配置类加上@Configuration和@ConfigurationProperties("zun.rpc.registry")注解
+
+```java
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Configuration
+@ConfigurationProperties("zun.rpc")
+public class RpcConfig {
+```
+
+```java
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Configuration
+@ConfigurationProperties("zun.rpc.registry")
+public class RegistryConfig {
+```
+
+2）编写resource/META-INFO/spring.factories，为了编写YAML时有提示，我分成了两个，因为Spring SPI 会将配置类注入到IOC容器中，对应的获取RegistryConfig对象的地方也得改成从IOC容器中获取
+
+```properties
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  com.zunf.rpc.config.RpcConfig,\
+  com.zunf.rpc.config.RegistryConfig
+```
+
+```java
+    @Autowired
+    private RegistryConfig registryConfig;
+```
+
+注意每个全类名前面的空行
+
+3）`RpcInitBootStrap`改成实现`BeanPostProcessor`，如果实现`ImportBeanDefinitionRegistrar`的话，调用registerBeanDefinitions方法时还没有将对象实例注入容器中，是获取不到配置类对象的。
+
+```java
+public class RpcInitBootStrap implements BeanPostProcessor {
+
+    @Autowired
+    private RegistryConfig registryConfig;
+
+    /**
+     * 是否已经初始化过注册器了
+     */
+    private boolean isInitRegistry = false;
+
+    @Override
+    public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+        if (!isInitRegistry) {
+            //注册中心初始化
+            Registry registry = RegistryFactory.getInstance(registryConfig.getType());
+            registry.init(registryConfig);
+            //初始化结束后，创建 ShutdownHook ,JVM退出时执行
+            Runtime.getRuntime().addShutdownHook(new Thread(registry::destroy));
+            isInitRegistry = true;
+        }
+        return BeanPostProcessor.super.postProcessBeforeInitialization(bean, beanName);
+    }
+}
+```
+
+4）`RpcProviderBootStrap`和`RpcConsumerBootStrap`都改成从IOC容器获取配置类
+
+- 因为BeanPostProcessor的`postProcessBeforeInitialization`和`postProcessAfterInitialization`两个方法，前者是在对象注入容器之后，在执行初始化方法（afterPropertiesSet或自定义init方法）之前调用之前调用的、而后者是init之后调用的。所以两个方法被调用时，容器中都会存在配置类实例。
+
+```java
+    @Autowired
+    private RpcConfig rpcConfig;
+```
 
 
 
-
+### 
 
 
 

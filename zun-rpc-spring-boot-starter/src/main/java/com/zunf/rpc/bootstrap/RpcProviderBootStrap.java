@@ -1,6 +1,7 @@
 package com.zunf.rpc.bootstrap;
 
 import com.zunf.rpc.annotation.ZunRpcService;
+import com.zunf.rpc.config.RegistryConfig;
 import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.model.ServiceMetaInfo;
 import com.zunf.rpc.registry.LocalRegistry;
@@ -8,11 +9,9 @@ import com.zunf.rpc.registry.Registry;
 import com.zunf.rpc.registry.RegistryFactory;
 import com.zunf.rpc.server.WebServer;
 import com.zunf.rpc.server.impl.VertxTcpServer;
-import com.zunf.rpc.utils.SpringContextUtil;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationContextAware;
 
 /**
  * 服务提供者驱动
@@ -20,11 +19,15 @@ import org.springframework.context.ApplicationContextAware;
  * @author zunf
  * @date 2024/5/23 15:33
  */
-public class RpcProviderBootStrap implements BeanPostProcessor, ApplicationContextAware {
-
-    private ApplicationContext applicationContext;
+public class RpcProviderBootStrap implements BeanPostProcessor {
 
     private boolean webServerIsStarted = false;
+
+    @Autowired
+    private RpcConfig rpcConfig;
+
+    @Autowired
+    private RegistryConfig registryConfig;
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
@@ -33,8 +36,6 @@ public class RpcProviderBootStrap implements BeanPostProcessor, ApplicationConte
         ZunRpcService zunRpcService = beanClass.getAnnotation(ZunRpcService.class);
         if (zunRpcService != null) {
             //1.类标识了我们的注解，将服务注册到注册中心
-            //因为这个方法调用时正在构建IOC容器，所以无法从我们封装的工具类中获取RpcConfig
-            RpcConfig rpcConfig = applicationContext.getBean(RpcConfig.class);;
 
             Class<?> interfaceClass = zunRpcService.interfaceClass();
             //没有指定，就自己获取实现接口的第一个
@@ -48,7 +49,7 @@ public class RpcProviderBootStrap implements BeanPostProcessor, ApplicationConte
             serviceMetaInfo.setHost(rpcConfig.getServerHost());
             serviceMetaInfo.setPort(rpcConfig.getServerPort());
 
-            Registry registry = RegistryFactory.getInstance(rpcConfig.getRegistryConfig().getType());
+            Registry registry = RegistryFactory.getInstance(registryConfig.getType());
             try {
                 registry.register(serviceMetaInfo);
             } catch (Exception e) {
@@ -67,10 +68,5 @@ public class RpcProviderBootStrap implements BeanPostProcessor, ApplicationConte
         }
 
         return BeanPostProcessor.super.postProcessAfterInitialization(bean, beanName);
-    }
-
-    @Override
-    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-        this.applicationContext = applicationContext;
     }
 }

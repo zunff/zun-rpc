@@ -28,6 +28,8 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 public class VertxTcpClient {
 
+
+
     public static RpcResponse doRequest(ServiceMetaInfo serviceMetaInfo, RpcRequest request, RpcConfig rpcConfig)throws Exception {
 
             Vertx vertx = Vertx.vertx();

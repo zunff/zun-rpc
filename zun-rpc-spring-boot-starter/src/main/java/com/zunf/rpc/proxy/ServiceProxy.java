@@ -1,5 +1,6 @@
 package com.zunf.rpc.proxy;
 
+import com.zunf.rpc.config.RegistryConfig;
 import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.fault.retry.RetryStrategy;
 import com.zunf.rpc.fault.retry.RetryStrategyFactory;
@@ -46,7 +47,7 @@ public class ServiceProxy implements InvocationHandler {
 
         //获取服务提供者地址
         RpcConfig rpcConfig = SpringContextUtil.getBean(RpcConfig.class);
-        String registryType = rpcConfig.getRegistryConfig().getType();
+        String registryType = SpringContextUtil.getBean(RegistryConfig.class).getType();
         Registry registry = RegistryFactory.getInstance(registryType);
         ServiceMetaInfo serviceMetaInfo = new ServiceMetaInfo();
         serviceMetaInfo.setServiceName(serviceName);

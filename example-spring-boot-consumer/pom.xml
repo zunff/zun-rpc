@@ -72,7 +72,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring-boot.version}</version>
                 <configuration>
-                    <mainClass>com.zunf.examplespringbootconsumer.ExampleSpringBootConsumerApplication</mainClass>
+                    <mainClass>com.zunf.examplespringbootconsumer.ExampleSpringBootConsumerApplication2</mainClass>
                     <skip>true</skip>
                 </configuration>
                 <executions>

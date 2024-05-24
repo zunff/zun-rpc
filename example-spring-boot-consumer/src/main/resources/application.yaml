@@ -1,0 +1,13 @@
+server:
+  port: 8001
+
+zun:
+  rpc:
+    server-host: http://localhost
+    serializer: jdk
+    load-balancer: random
+    retry-strategy: fixedInterval
+    tolerance-strategy: failOver
+    registry:
+      type: etcd
+      address: http://localhost:2380

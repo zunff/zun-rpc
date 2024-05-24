@@ -4,11 +4,12 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.setting.dialect.Props;
 
 /**
- * RPC配置工具类
+ * RPC配置工具类（弃置，改为YAML文件读取）
  *
  * @author zunf
  * @date 2024/5/6 09:58
  */
+@Deprecated
 public class ConfigUtils {
 
     /**

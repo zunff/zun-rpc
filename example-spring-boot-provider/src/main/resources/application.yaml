@@ -1,0 +1,14 @@
+server:
+  port: 8000
+
+zun:
+  rpc:
+    application: example-provider
+    version: 1.0
+    serializer: jdk
+    registry:
+      address: http://localhost:2380
+      type: etcd
+
+
+

@@ -19,7 +19,7 @@ import java.lang.annotation.Target;
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-@Import({SpringContextUtil.class, RpcInitBootStrap.class, RpcProviderBootStrap.class, RpcConsumerBootStrap.class})
+@Import({RpcInitBootStrap.class, SpringContextUtil.class, RpcProviderBootStrap.class, RpcConsumerBootStrap.class})
 public @interface EnableZunRpc {
 
 }

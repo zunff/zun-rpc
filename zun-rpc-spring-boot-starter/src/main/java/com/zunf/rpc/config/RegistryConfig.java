@@ -1,6 +1,10 @@
 package com.zunf.rpc.config;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
 
 /**
  * 服务注册中心配置
@@ -9,6 +13,10 @@ import lombok.Data;
  * @date 2024/5/9 10:47
  */
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Configuration
+@ConfigurationProperties("zun.rpc.registry")
 public class RegistryConfig {
 
     /**

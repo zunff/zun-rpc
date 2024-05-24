@@ -7,6 +7,8 @@
     <packaging>pom</packaging>
     <modules>
         <module>zun-rpc-spring-boot-starter</module>
+        <module>example-spring-boot-consumer</module>
+        <module>example-spring-boot-provider</module>
         <module>zun-rpc-core</module>
         <module>zun-rpc-easy</module>
         <module>example-common</module>

@@ -9,6 +9,7 @@
             <option value="$PROJECT_DIR$/example-spring-boot-provider" />
           </set>
         </option>
+        <option name="resolveExternalAnnotations" value="false" />
       </GradleProjectSettings>
     </option>
   </component>

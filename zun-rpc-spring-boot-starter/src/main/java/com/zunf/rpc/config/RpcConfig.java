@@ -6,6 +6,8 @@ import com.zunf.rpc.constants.ToleranceStrategyKeys;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
 
 /**
  * 服务提供者配置
@@ -16,6 +18,8 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Configuration
+@ConfigurationProperties("zun.rpc")
 public class RpcConfig {
 
     //consumer、provider 通用配置 begin
@@ -23,17 +27,12 @@ public class RpcConfig {
     /**
      * 服务提供者监听端口
      */
-    private int serverPort = 8088;
+    private int serverPort = 10880;
 
     /**
      * 序列化器
      */
     private String serializer = "jdk";
-
-    /**
-     * 注册中心配置
-     */
-    private RegistryConfig registryConfig;
 
     //end
 
