@@ -1,4 +1,31 @@
 # 手写RPC框架
+
+**项目目录：**
+
+```c
+|
+|----- example-common 存储通用对象
+|
+|----- example-consumer 服务消费者-测试RPC框架V1.0、V2.0
+|
+|----- example-provider 服务提供者-测试RPC框架V1.0、V2.0
+|
+|----- example-spring-boot-consumer 服务消费者-测试RPC框架V2.1
+|
+|----- example-spring-boot-provider 服务提供者-测试RPC框架V2.1
+|
+|--------------------------- 下面是RPC框架迭代 ------------------------------
+|
+|----- zun-rpc-core RPC框架 V2.0，具有本RPC框架的所有功能
+|
+|----- zun-rpc-easy RPC框架 V1.0，最初的一版RPC框架，只是跑通流程
+|
+|----- zun-rpc-spring-boot-starter RPC框架 V2.1，在V2.0的基础上进行了优化，并且集成了SpringBoot框架
+
+```
+
+
+
 ## RPC框架架构图
 ![img.png](./img/img.png)
 
@@ -2263,10 +2290,6 @@ public class RpcInitBootStrap implements BeanPostProcessor {
     @Autowired
     private RpcConfig rpcConfig;
 ```
-
-
-
-### 
 
 
 

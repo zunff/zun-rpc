@@ -29,46 +29,45 @@ import java.util.concurrent.CompletableFuture;
 public class VertxTcpClient {
 
 
+    public static RpcResponse doRequest(ServiceMetaInfo serviceMetaInfo, RpcRequest request, RpcConfig rpcConfig) throws Exception {
 
-    public static RpcResponse doRequest(ServiceMetaInfo serviceMetaInfo, RpcRequest request, RpcConfig rpcConfig)throws Exception {
+        Vertx vertx = Vertx.vertx();
+        NetClient netClient = vertx.createNetClient();
+        CompletableFuture<ProtocolMessage<RpcResponse>> completableFuture = new CompletableFuture<>();
+        //建立链接
+        netClient.connect(serviceMetaInfo.getPort(), serviceMetaInfo.getHost(), result -> {
+            if (result.succeeded()) {
+                NetSocket netSocket = result.result();
+                ProtocolMessage.Header header = new ProtocolMessage.Header();
 
-            Vertx vertx = Vertx.vertx();
-            NetClient netClient = vertx.createNetClient();
-            CompletableFuture<ProtocolMessage<RpcResponse>> completableFuture = new CompletableFuture<>();
-            //建立链接
-            netClient.connect(serviceMetaInfo.getPort(), serviceMetaInfo.getHost(), result -> {
-                if (result.succeeded()) {
-                    NetSocket netSocket = result.result();
-                    ProtocolMessage.Header header = new ProtocolMessage.Header();
-
-                    SerializerEnums serializerEnums = SerializerEnums.of(rpcConfig.getSerializer());
-                    if (serializerEnums == null) {
-                        throw new RuntimeException("序列化器类型不存在");
-                    }
-
-                    header.setSerializer((byte) serializerEnums.getType());
-                    header.setType((byte) MessageTypeEnums.REQUEST.getType());
-
-                    //发送请求
-                    ProtocolMessage<RpcRequest> protocolMessage = new ProtocolMessage<>(header, request);
-                    Buffer encode = ProtocolMessageEncoder.encode(protocolMessage);
-                    netSocket.write(encode);
-                    //接收响应，使用自己封装的装饰者模式加强过的能够处理半包、粘包的Handler
-                    netSocket.handler(new TcpBufferHandlerWrapper(buffer -> {
-                        ProtocolMessage<RpcResponse> decode = (ProtocolMessage<RpcResponse>) ProtocolMessageDecoder.decode(buffer);
-                        completableFuture.complete(decode);
-                    }));
-                } else {
-                    log.error("Fail to connect to server", result.cause());
+                SerializerEnums serializerEnums = SerializerEnums.of(rpcConfig.getSerializer());
+                if (serializerEnums == null) {
+                    throw new RuntimeException("序列化器类型不存在");
                 }
-            });
-            //阻塞，等到拿到了结果再往下执行
-            ProtocolMessage<RpcResponse> protocolMessage = completableFuture.get();
-            //关闭链接
-            netClient.close();
-            //处理响应结果中的异常信息，抛出异常
-            handleError(protocolMessage);
-            return protocolMessage.getBody();
+
+                header.setSerializer((byte) serializerEnums.getType());
+                header.setType((byte) MessageTypeEnums.REQUEST.getType());
+
+                //发送请求
+                ProtocolMessage<RpcRequest> protocolMessage = new ProtocolMessage<>(header, request);
+                Buffer encode = ProtocolMessageEncoder.encode(protocolMessage);
+                netSocket.write(encode);
+                //接收响应，使用自己封装的装饰者模式加强过的能够处理半包、粘包的Handler
+                netSocket.handler(new TcpBufferHandlerWrapper(buffer -> {
+                    ProtocolMessage<RpcResponse> decode = (ProtocolMessage<RpcResponse>) ProtocolMessageDecoder.decode(buffer);
+                    completableFuture.complete(decode);
+                }));
+            } else {
+                log.error("Fail to connect to server", result.cause());
+            }
+        });
+        //阻塞，等到拿到了结果再往下执行
+        ProtocolMessage<RpcResponse> protocolMessage = completableFuture.get();
+        //关闭链接
+        netClient.close();
+        //处理响应结果中的异常信息，抛出异常
+        handleError(protocolMessage);
+        return protocolMessage.getBody();
     }
 
     private static void handleError(ProtocolMessage<RpcResponse> protocolMessage) {

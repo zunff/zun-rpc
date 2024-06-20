@@ -13,14 +13,6 @@ import com.zunf.rpc.annotation.ZunRpcService;
 public class UserServiceImpl implements UserService {
     @Override
     public User getUser(String name) {
-        for (int i = 0; i < 10; i++) {
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-            System.out.println(i);
-        }
         return new User(name, 38);
     }
 }
