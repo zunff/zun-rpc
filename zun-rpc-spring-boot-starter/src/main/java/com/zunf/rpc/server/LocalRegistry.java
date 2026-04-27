@@ -1,4 +1,4 @@
-package com.zunf.rpc.registry;
+package com.zunf.rpc.server;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
