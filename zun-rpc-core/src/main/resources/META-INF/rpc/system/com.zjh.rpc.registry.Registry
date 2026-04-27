@@ -1,1 +1,0 @@
-etcd=com.zjh.rpc.registry.impl.EtcdRegistry
