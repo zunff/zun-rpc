@@ -1,10 +1,10 @@
 package com.zunf.examplespringbootprovider;
 
-import com.zunf.rpc.annotation.EnableZunRpc;
+import com.zunf.rpc.annotation.EnableZunRpcProvider;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@EnableZunRpc
+@EnableZunRpcProvider
 @SpringBootApplication
 public class ExampleSpringBootProviderApplication {
 

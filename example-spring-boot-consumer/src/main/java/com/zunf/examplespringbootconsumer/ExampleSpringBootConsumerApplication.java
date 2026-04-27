@@ -1,10 +1,10 @@
 package com.zunf.examplespringbootconsumer;
 
-import com.zunf.rpc.annotation.EnableZunRpc;
+import com.zunf.rpc.annotation.EnableZunRpcConsumer;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@EnableZunRpc
+@EnableZunRpcConsumer
 @SpringBootApplication
 public class ExampleSpringBootConsumerApplication {
 

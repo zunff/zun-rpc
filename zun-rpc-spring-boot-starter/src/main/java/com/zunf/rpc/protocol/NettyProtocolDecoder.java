@@ -1,50 +1,55 @@
 package com.zunf.rpc.protocol;
 
-import com.zunf.rpc.serializer.Serializer;
-import com.zunf.rpc.serializer.SerializerFactory;
 import com.zunf.rpc.constants.ProtocolConstants;
 import com.zunf.rpc.enums.MessageTypeEnums;
 import com.zunf.rpc.enums.SerializerEnums;
 import com.zunf.rpc.model.RpcRequest;
 import com.zunf.rpc.model.RpcResponse;
-import io.vertx.core.buffer.Buffer;
+import com.zunf.rpc.serializer.Serializer;
+import com.zunf.rpc.serializer.SerializerFactory;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.ByteToMessageDecoder;
 import lombok.SneakyThrows;
 
-/**
- * 自定义协议解码器
- *
- * @author zunf
- * @date 2024/5/15 10:13
- */
-public class ProtocolMessageDecoder {
+import java.util.List;
+
+public class NettyProtocolDecoder extends ByteToMessageDecoder {
 
     @SneakyThrows
-    public static ProtocolMessage<?> decode(Buffer buffer) {
+    @Override
+    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
+        if (in.readableBytes() < ProtocolConstants.MESSAGE_HEAD_LENGTH) {
+            return;
+        }
 
-        byte magic = buffer.getByte(0);
+        in.markReaderIndex();
 
+        byte magic = in.readByte();
         if (magic != ProtocolConstants.MAGIC) {
             throw new RuntimeException("消息 magic 非法");
         }
-
-        byte version = buffer.getByte(1);
+        byte version = in.readByte();
         if (version != ProtocolConstants.VERSION) {
             throw new RuntimeException("解码器与编码器版本不一致");
         }
 
         ProtocolMessage.Header header = new ProtocolMessage.Header();
-
-        //传入的数字是从第几个字节开始读
         header.setMagic(magic);
         header.setVersion(version);
-        header.setSerializer(buffer.getByte(2));
-        header.setType(buffer.getByte(3));
-        header.setStatus(buffer.getByte(4));
-        header.setRequestId(buffer.getLong(5));
-        header.setBodyLength(buffer.getInt(13));
+        header.setSerializer(in.readByte());
+        header.setType(in.readByte());
+        header.setStatus(in.readByte());
+        header.setRequestId(in.readLong());
+        header.setBodyLength(in.readInt());
 
-        int bodyBegin = ProtocolConstants.MESSAGE_HEAD_LENGTH;
-        byte[] body = buffer.getBytes(bodyBegin, bodyBegin + header.getBodyLength());
+        if (in.readableBytes() < header.getBodyLength()) {
+            in.resetReaderIndex();
+            return;
+        }
+
+        byte[] body = new byte[header.getBodyLength()];
+        in.readBytes(body);
 
         MessageTypeEnums messageTypeEnum = MessageTypeEnums.of(header.getType());
         if (messageTypeEnum == null) {
@@ -60,14 +65,17 @@ public class ProtocolMessageDecoder {
         switch (messageTypeEnum) {
             case REQUEST:
                 RpcRequest rpcRequest = serializer.deserialize(body, RpcRequest.class);
-                return new ProtocolMessage<>(header, rpcRequest);
+                out.add(new ProtocolMessage<>(header, rpcRequest));
+                break;
             case RESPONSE:
                 RpcResponse rpcResponse = serializer.deserialize(body, RpcResponse.class);
-                return new ProtocolMessage<>(header, rpcResponse);
+                out.add(new ProtocolMessage<>(header, rpcResponse));
+                break;
             case HEARTBEAT:
+                out.add(new ProtocolMessage<>(header, null));
+                break;
             default:
-                throw new RuntimeException("暂不支持该类型");
+                throw new RuntimeException("不支持的消息类型: " + header.getType());
         }
     }
-
 }

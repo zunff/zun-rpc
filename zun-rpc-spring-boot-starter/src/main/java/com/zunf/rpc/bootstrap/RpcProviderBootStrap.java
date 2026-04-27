@@ -4,11 +4,11 @@ import com.zunf.rpc.annotation.ZunRpcService;
 import com.zunf.rpc.config.RegistryConfig;
 import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.model.ServiceMetaInfo;
-import com.zunf.rpc.registry.LocalRegistry;
+import com.zunf.rpc.server.LocalRegistry;
 import com.zunf.rpc.registry.Registry;
 import com.zunf.rpc.registry.RegistryFactory;
 import com.zunf.rpc.server.WebServer;
-import com.zunf.rpc.server.impl.VertxTcpServer;
+import com.zunf.rpc.server.impl.NettyTcpServer;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -61,7 +61,7 @@ public class RpcProviderBootStrap implements BeanPostProcessor {
 
             //3.如果没有启动Web服务器，启动
             if (!webServerIsStarted) {
-                WebServer webServer = new VertxTcpServer();
+                WebServer webServer = new NettyTcpServer();
                 webServer.doStart(rpcConfig.getServerPort());
                 webServerIsStarted = true;
             }

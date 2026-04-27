@@ -13,7 +13,7 @@ import com.zunf.rpc.model.RpcResponse;
 import com.zunf.rpc.model.ServiceMetaInfo;
 import com.zunf.rpc.registry.Registry;
 import com.zunf.rpc.registry.RegistryFactory;
-import com.zunf.rpc.server.client.VertxTcpClient;
+import com.zunf.rpc.client.NettyTcpClient;
 import com.zunf.rpc.utils.SpringContextUtil;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +36,20 @@ public class ServiceProxy implements InvocationHandler {
     @SneakyThrows
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) {
+        // 拦截 Object 方法，不走 RPC
+        if (method.getDeclaringClass() == Object.class) {
+            switch (method.getName()) {
+                case "toString":
+                    return "ServiceProxy@" + System.identityHashCode(proxy);
+                case "hashCode":
+                    return System.identityHashCode(proxy);
+                case "equals":
+                    return proxy == args[0];
+                default:
+                    throw new UnsupportedOperationException("Unsupported method: " + method.getName());
+            }
+        }
+
         //构造请求参数
         String serviceName = method.getDeclaringClass().getName();
         RpcRequest request = RpcRequest.builder()
@@ -65,7 +79,7 @@ public class ServiceProxy implements InvocationHandler {
         try {
             RetryStrategy retryStrategy = RetryStrategyFactory.getInstance(rpcConfig.getRetryStrategy());
             rpcResponse = retryStrategy.doRetry(() ->
-                    VertxTcpClient.doRequest(selectedService, request, rpcConfig));
+                    NettyTcpClient.doRequest(selectedService, request, rpcConfig));
             return rpcResponse.getData();
         } catch (Exception e) {
             log.warn("重试结束，启动容错机制...");

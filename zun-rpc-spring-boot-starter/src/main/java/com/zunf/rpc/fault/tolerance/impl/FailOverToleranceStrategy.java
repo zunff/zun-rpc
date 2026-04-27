@@ -1,7 +1,7 @@
 package com.zunf.rpc.fault.tolerance.impl;
 
 import com.zunf.rpc.registry.RegistryServiceCache;
-import com.zunf.rpc.server.client.VertxTcpClient;
+import com.zunf.rpc.client.NettyTcpClient;
 import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.fault.retry.RetryStrategy;
 import com.zunf.rpc.fault.retry.RetryStrategyFactory;
@@ -50,7 +50,7 @@ public class FailOverToleranceStrategy implements ToleranceStrategy {
         RpcResponse rpcResponse;
         try {
             rpcResponse = retryStrategy.doRetry(() ->
-                    VertxTcpClient.doRequest(selectedService, request, rpcConfig));
+                    NettyTcpClient.doRequest(selectedService, request, rpcConfig));
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
