@@ -6,7 +6,7 @@ import com.zunf.rpc.enums.SerializerEnums;
 import com.zunf.rpc.model.RpcRequest;
 import com.zunf.rpc.model.RpcResponse;
 import com.zunf.rpc.serializer.Serializer;
-import com.zunf.rpc.serializer.SerializerFactory;
+import com.zunf.rpc.serializer.SerializerRegistry;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
@@ -60,7 +60,7 @@ public class NettyProtocolDecoder extends ByteToMessageDecoder {
         if (serializerEnum == null) {
             throw new RuntimeException("序列化器类型不存在");
         }
-        Serializer serializer = SerializerFactory.getInstance(serializerEnum.getValue());
+        Serializer serializer = SerializerRegistry.get(serializerEnum.getValue());
 
         switch (messageTypeEnum) {
             case REQUEST:

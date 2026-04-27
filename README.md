@@ -11,7 +11,7 @@
 - **Spring Boot 集成** — 通过 `@EnableZunRpcProvider` / `@EnableZunRpcConsumer` 注解按需启用，`@ZunRpcService` / `@ZunRpcReference` 声明式使用
 - **自定义 TCP 协议** — 17 字节定长协议头，支持多种序列化格式
 - **Netty 通信层** — 基于 Netty 实现 TCP 通信，内置连接池复用、requestId 多路复用、心跳保活机制
-- **SPI 可扩展** — 序列化器、注册中心、负载均衡器、重试/容错策略均可通过 SPI 扩展替换
+- **可扩展** — 序列化器、注册中心、负载均衡器、重试/容错策略均可通过 `@Bean` 替换默认实现
 - **注册中心** — 支持 Etcd（Watch 服务变更、心跳续期、优雅下线）和直连模式（无需注册中心）
 - **负载均衡** — 随机、轮询、一致性哈希
 - **容错重试** — 支持不重试/固定间隔重试，以及快速失败/安全失败/失败自动恢复/失败自动切换容错策略
@@ -330,27 +330,38 @@ zun:
 |--------|------|--------|
 | `zun.rpc.serializer` | 序列化方式 | `jdk` `json` `hessian` `kryo` |
 | `zun.rpc.load-balancer` | 负载均衡策略 | `random` `roundRobin` `consistentHash` |
-| `zun.rpc.retry-strategy` | 重试策略 | `noRetry` `fixedInterval` |
+| `zun.rpc.retry-strategy` | 重试策略 | `no` `fixedInterval` |
 | `zun.rpc.tolerance-strategy` | 容错策略 | `failFast` `failSafe` `failBack` `failOver` |
 | `zun.rpc.registry.type` | 注册中心类型 | `etcd` `direct` |
 | `zun.rpc.registry.address` | 注册中心地址 | Etcd: `http://localhost:2380`；直连: `localhost:10880` |
 
-## SPI 扩展
+## 自定义扩展
 
-框架各核心组件均支持通过 SPI 机制扩展。在项目的 `resources/META-INF/rpc/custom/` 目录下创建以接口全限定名命名的文件，写入实现类映射即可覆盖默认实现：
+框架各核心组件均支持替换默认实现。只需在项目中定义一个 `@Bean`，框架会优先使用你提供的实现：
 
+```java
+@Configuration
+public class MyRpcConfig {
+
+    @Bean
+    public Serializer serializer() {
+        return new MyCustomSerializer();
+    }
+
+    @Bean
+    public Registry registry() {
+        return new MyCustomRegistry();
+    }
+}
 ```
-# resources/META-INF/rpc/custom/com.zunf.rpc.serializer.Serializer
-mySerializer=com.example.MySerializer
-```
 
-支持的 SPI 扩展点：
+支持替换的组件：
 
-- `com.zunf.rpc.serializer.Serializer` — 序列化器
-- `com.zunf.rpc.registry.Registry` — 注册中心
-- `com.zunf.rpc.loadbalancer.LoadBalancer` — 负载均衡器
-- `com.zunf.rpc.fault.retry.RetryStrategy` — 重试策略
-- `com.zunf.rpc.fault.tolerance.ToleranceStrategy` — 容错策略
+- `Serializer` — 序列化器
+- `Registry` — 注册中心
+- `LoadBalancer` — 负载均衡器
+- `RetryStrategy` — 重试策略
+- `ToleranceStrategy` — 容错策略
 
 ## 技术栈
 

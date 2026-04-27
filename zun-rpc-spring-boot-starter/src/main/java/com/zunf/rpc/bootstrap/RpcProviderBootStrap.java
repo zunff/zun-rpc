@@ -1,14 +1,13 @@
 package com.zunf.rpc.bootstrap;
 
 import com.zunf.rpc.annotation.ZunRpcService;
-import com.zunf.rpc.config.RegistryConfig;
 import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.model.ServiceMetaInfo;
 import com.zunf.rpc.server.LocalRegistry;
 import com.zunf.rpc.registry.Registry;
-import com.zunf.rpc.registry.RegistryFactory;
 import com.zunf.rpc.server.WebServer;
 import com.zunf.rpc.server.impl.NettyTcpServer;
+import com.zunf.rpc.utils.SpringContextUtil;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -25,9 +24,6 @@ public class RpcProviderBootStrap implements BeanPostProcessor {
 
     @Autowired
     private RpcConfig rpcConfig;
-
-    @Autowired
-    private RegistryConfig registryConfig;
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
@@ -49,7 +45,7 @@ public class RpcProviderBootStrap implements BeanPostProcessor {
             serviceMetaInfo.setHost(rpcConfig.getServerHost());
             serviceMetaInfo.setPort(rpcConfig.getServerPort());
 
-            Registry registry = RegistryFactory.getInstance(registryConfig.getType());
+            Registry registry = SpringContextUtil.getBean(Registry.class);
             try {
                 registry.register(serviceMetaInfo);
             } catch (Exception e) {

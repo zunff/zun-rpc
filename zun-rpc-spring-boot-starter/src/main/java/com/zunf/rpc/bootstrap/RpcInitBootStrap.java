@@ -2,7 +2,7 @@ package com.zunf.rpc.bootstrap;
 
 import com.zunf.rpc.config.RegistryConfig;
 import com.zunf.rpc.registry.Registry;
-import com.zunf.rpc.registry.RegistryFactory;
+import com.zunf.rpc.utils.SpringContextUtil;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -27,7 +27,7 @@ public class RpcInitBootStrap implements BeanPostProcessor {
     public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
         if (!isInitRegistry) {
             //注册中心初始化
-            Registry registry = RegistryFactory.getInstance(registryConfig.getType());
+            Registry registry = SpringContextUtil.getBean(Registry.class);
             registry.init(registryConfig);
             //初始化结束后，创建 ShutdownHook ,JVM退出时执行
             Runtime.getRuntime().addShutdownHook(new Thread(registry::destroy));

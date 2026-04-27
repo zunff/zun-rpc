@@ -4,7 +4,6 @@ import com.zunf.rpc.registry.RegistryServiceCache;
 import com.zunf.rpc.client.NettyTcpClient;
 import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.fault.retry.RetryStrategy;
-import com.zunf.rpc.fault.retry.RetryStrategyFactory;
 import com.zunf.rpc.fault.tolerance.ToleranceStrategy;
 import com.zunf.rpc.loadbalancer.LoadBalancer;
 import com.zunf.rpc.loadbalancer.impl.RandomLoadBalancer;
@@ -46,7 +45,7 @@ public class FailOverToleranceStrategy implements ToleranceStrategy {
         LoadBalancer loadBalancer = new RandomLoadBalancer();
         ServiceMetaInfo selectedService = loadBalancer.select(null, filterList);
         //发送请求，重试，报错直接抛出
-        RetryStrategy retryStrategy = RetryStrategyFactory.getInstance(rpcConfig.getRetryStrategy());
+        RetryStrategy retryStrategy = SpringContextUtil.getBean(RetryStrategy.class);
         RpcResponse rpcResponse;
         try {
             rpcResponse = retryStrategy.doRetry(() ->

@@ -1,8 +1,5 @@
 package com.zunf.rpc.config;
 
-import com.zunf.rpc.constants.LoaderBalancerKeys;
-import com.zunf.rpc.constants.RetryStrategyKeys;
-import com.zunf.rpc.constants.ToleranceStrategyKeys;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -53,17 +50,17 @@ public class RpcConfig {
     /**
      * 负载均衡器，默认轮询
      */
-    private String loadBalancer = LoaderBalancerKeys.ROUND_ROBIN;
+    private String loadBalancer = "roundRobin";
 
     /**
      * 重试策略，默认不重试
      */
-    private String retryStrategy = RetryStrategyKeys.NO;
+    private String retryStrategy = "no";
 
     /**
      * 容错策略，默认快速失败
      */
-    private String toleranceStrategy = ToleranceStrategyKeys.FAIL_FAST;
+    private String toleranceStrategy = "failFast";
     //end
 
 

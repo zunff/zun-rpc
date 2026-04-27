@@ -1,2 +1,0 @@
-etcd=com.zunf.rpc.registry.impl.EtcdRegistry
-direct=com.zunf.rpc.registry.impl.DirectRegistry
