@@ -3,6 +3,7 @@ package com.zunf.rpc.serializer.impl;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import com.zunf.rpc.enums.SerializerEnums;
 import com.zunf.rpc.serializer.Serializer;
 
 import java.io.ByteArrayInputStream;
@@ -16,6 +17,11 @@ import java.io.IOException;
  * @date 2024/5/6 16:46
  */
 public class KryoSerializer implements Serializer {
+
+    @Override
+    public SerializerEnums getType() {
+        return SerializerEnums.KRYO;
+    }
 
     /**
      * kryo线程不安全，使用ThreadLocal保证每一个线程只有一个kryo

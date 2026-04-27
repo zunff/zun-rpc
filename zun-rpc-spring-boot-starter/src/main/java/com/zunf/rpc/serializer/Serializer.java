@@ -1,5 +1,7 @@
 package com.zunf.rpc.serializer;
 
+import com.zunf.rpc.enums.SerializerEnums;
+
 import java.io.IOException;
 
 /**
@@ -9,6 +11,11 @@ import java.io.IOException;
  * @date 2024/5/6 01:01
  */
  public interface Serializer {
+
+    /**
+     * 获取序列化器类型枚举
+     */
+    SerializerEnums getType();
 
     /**
      * 序列化

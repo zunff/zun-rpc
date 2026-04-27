@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.annotation.Configuration;
 
 /**
  * 服务注册中心配置
@@ -15,14 +14,8 @@ import org.springframework.context.annotation.Configuration;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-@Configuration
 @ConfigurationProperties("zun.rpc.registry")
 public class RegistryConfig {
-
-    /**
-     * 注册中心类型
-     */
-    private String type;
 
     /**
      * 注册中心地址

@@ -2,7 +2,6 @@ package com.zunf.rpc.fault.tolerance.impl;
 
 import com.zunf.rpc.registry.RegistryServiceCache;
 import com.zunf.rpc.client.NettyTcpClient;
-import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.fault.retry.RetryStrategy;
 import com.zunf.rpc.fault.tolerance.ToleranceStrategy;
 import com.zunf.rpc.loadbalancer.LoadBalancer;
@@ -11,7 +10,9 @@ import com.zunf.rpc.model.RpcRequest;
 import com.zunf.rpc.model.RpcResponse;
 import com.zunf.rpc.model.ServiceMetaInfo;
 import com.zunf.rpc.utils.SpringContextUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 
+import javax.annotation.Resource;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -23,6 +24,10 @@ import java.util.stream.Collectors;
  * @date 2024/5/22 18:52
  */
 public class FailOverToleranceStrategy implements ToleranceStrategy {
+
+    @Autowired
+    private RetryStrategy retryStrategy;
+
     @Override
     public RpcResponse doTolerance(Map<String, Object> context, Exception e) {
         String serviceKey = (String) context.get("serviceKey");
@@ -39,17 +44,14 @@ public class FailOverToleranceStrategy implements ToleranceStrategy {
             throw new RuntimeException("调用远程服务报错", e);
         }
 
-        RpcConfig rpcConfig = SpringContextUtil.getBean(RpcConfig.class);
-
         //直接随便拿一个服务
         LoadBalancer loadBalancer = new RandomLoadBalancer();
         ServiceMetaInfo selectedService = loadBalancer.select(null, filterList);
         //发送请求，重试，报错直接抛出
-        RetryStrategy retryStrategy = SpringContextUtil.getBean(RetryStrategy.class);
         RpcResponse rpcResponse;
         try {
             rpcResponse = retryStrategy.doRetry(() ->
-                    NettyTcpClient.doRequest(selectedService, request, rpcConfig));
+                    NettyTcpClient.doRequest(selectedService, request));
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }

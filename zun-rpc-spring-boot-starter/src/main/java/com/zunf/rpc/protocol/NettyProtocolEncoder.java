@@ -1,9 +1,8 @@
 package com.zunf.rpc.protocol;
 
 import com.zunf.rpc.constants.ProtocolConstants;
-import com.zunf.rpc.enums.SerializerEnums;
 import com.zunf.rpc.serializer.Serializer;
-import com.zunf.rpc.serializer.SerializerRegistry;
+import com.zunf.rpc.utils.SpringContextUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
@@ -22,11 +21,7 @@ public class NettyProtocolEncoder extends MessageToByteEncoder<ProtocolMessage<?
     protected void encode(ChannelHandlerContext ctx, ProtocolMessage<?> message, ByteBuf out) {
         ProtocolMessage.Header header = message.getHeader();
 
-        SerializerEnums serializerEnum = SerializerEnums.of(header.getSerializer());
-        if (serializerEnum == null) {
-            throw new RuntimeException("序列化协议不存在");
-        }
-        Serializer serializer = SerializerRegistry.get(serializerEnum.getValue());
+        Serializer serializer = SpringContextUtil.getBean(Serializer.class);
         byte[] body = serializer.serialize(message.getBody());
 
         out.writeByte(ProtocolConstants.MAGIC);

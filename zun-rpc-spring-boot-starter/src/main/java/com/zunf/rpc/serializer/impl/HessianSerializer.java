@@ -3,6 +3,7 @@ package com.zunf.rpc.serializer.impl;
 
 import com.caucho.hessian.io.HessianInput;
 import com.caucho.hessian.io.HessianOutput;
+import com.zunf.rpc.enums.SerializerEnums;
 import com.zunf.rpc.serializer.Serializer;
 
 import java.io.ByteArrayInputStream;
@@ -16,6 +17,12 @@ import java.io.IOException;
  * @date 2024/5/6 16:35
  */
 public class HessianSerializer implements Serializer {
+
+    @Override
+    public SerializerEnums getType() {
+        return SerializerEnums.HESSIAN;
+    }
+
     @Override
     public <T> byte[] serialize(T object) throws IOException {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();

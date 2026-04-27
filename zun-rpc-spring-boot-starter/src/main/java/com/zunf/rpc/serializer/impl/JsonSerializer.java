@@ -1,6 +1,7 @@
 package com.zunf.rpc.serializer.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zunf.rpc.enums.SerializerEnums;
 import com.zunf.rpc.model.RpcRequest;
 import com.zunf.rpc.model.RpcResponse;
 import com.zunf.rpc.serializer.Serializer;
@@ -14,6 +15,11 @@ import java.io.IOException;
  * @date 2024/5/6 15:16
  */
 public class JsonSerializer implements Serializer {
+
+    @Override
+    public SerializerEnums getType() {
+        return SerializerEnums.JSON;
+    }
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 

@@ -5,8 +5,6 @@ zun:
   rpc:
     application: example-provider
     version: 1.0
-    serializer: jdk
     server-port: 10880
     registry:
-      type: direct
       address: localhost:10880

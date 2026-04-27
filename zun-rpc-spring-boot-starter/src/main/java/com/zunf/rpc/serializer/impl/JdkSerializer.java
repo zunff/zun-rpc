@@ -1,5 +1,6 @@
 package com.zunf.rpc.serializer.impl;
 
+import com.zunf.rpc.enums.SerializerEnums;
 import com.zunf.rpc.serializer.Serializer;
 
 import java.io.*;
@@ -11,6 +12,12 @@ import java.io.*;
  * @date 2024/5/6 00:59
  */
 public class JdkSerializer implements Serializer {
+
+    @Override
+    public SerializerEnums getType() {
+        return SerializerEnums.JDK;
+    }
+
     /**
      * 序列化
      *

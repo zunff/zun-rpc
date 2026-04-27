@@ -3,7 +3,6 @@ server:
 
 zun:
   rpc:
-    serializer: jdk
+    server-host: localhost
     registry:
-      type: direct
       address: localhost:10880

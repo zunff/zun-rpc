@@ -1,6 +1,5 @@
 package com.zunf.rpc.proxy;
 
-import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.fault.retry.RetryStrategy;
 import com.zunf.rpc.fault.tolerance.ToleranceStrategy;
 import com.zunf.rpc.loadbalancer.LoadBalancer;
@@ -46,7 +45,6 @@ public class ServiceProxy implements InvocationHandler {
                 .build();
 
         //获取服务提供者地址
-        RpcConfig rpcConfig = SpringContextUtil.getBean(RpcConfig.class);
         Registry registry = SpringContextUtil.getBean(Registry.class);
         ServiceMetaInfo serviceMetaInfo = new ServiceMetaInfo();
         serviceMetaInfo.setServiceName(serviceName);
@@ -62,7 +60,7 @@ public class ServiceProxy implements InvocationHandler {
         try {
             RetryStrategy retryStrategy = SpringContextUtil.getBean(RetryStrategy.class);
             rpcResponse = retryStrategy.doRetry(() ->
-                    NettyTcpClient.doRequest(selectedService, request, rpcConfig));
+                    NettyTcpClient.doRequest(selectedService, request));
             return rpcResponse.getData();
         } catch (Exception e) {
             log.warn("重试结束，启动容错机制...");

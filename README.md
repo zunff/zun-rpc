@@ -247,12 +247,14 @@ zun:
   rpc:
     application: my-provider
     version: 1.0
-    serializer: jdk
     server-port: 10880
+    server-host: localhost
     registry:
       type: etcd
       address: http://localhost:2380
 ```
+
+如需自定义序列化器等组件，通过 `@Bean` 注册（见下方 [自定义扩展](#自定义扩展)）。
 
 ### 4. 服务消费者
 
@@ -285,14 +287,13 @@ public class TestController {
 ```yaml
 zun:
   rpc:
-    serializer: jdk
-    load-balancer: random
-    retry-strategy: fixedInterval
-    tolerance-strategy: failOver
+    server-host: localhost
     registry:
       type: etcd
       address: http://localhost:2380
 ```
+
+如需自定义序列化器、负载均衡等组件，通过 `@Bean` 注册（见下方 [自定义扩展](#自定义扩展)）。
 
 ### 5. 构建运行
 
@@ -316,52 +317,106 @@ mvn spring-boot:run -pl example-spring-boot-consumer
 ```yaml
 zun:
   rpc:
-    serializer: jdk
     registry:
       type: direct
-      address: localhost:10880   # Provider 地址
+      address: localhost:10880
 ```
 
 适用于开发测试或固定地址场景。
 
 ## 配置项
 
-| 配置项 | 说明 | 可选值 |
+| 配置项 | 说明 | 默认值 |
 |--------|------|--------|
-| `zun.rpc.serializer` | 序列化方式 | `jdk` `json` `hessian` `kryo` |
-| `zun.rpc.load-balancer` | 负载均衡策略 | `random` `roundRobin` `consistentHash` |
-| `zun.rpc.retry-strategy` | 重试策略 | `no` `fixedInterval` |
-| `zun.rpc.tolerance-strategy` | 容错策略 | `failFast` `failSafe` `failBack` `failOver` |
-| `zun.rpc.registry.type` | 注册中心类型 | `etcd` `direct` |
-| `zun.rpc.registry.address` | 注册中心地址 | Etcd: `http://localhost:2380`；直连: `localhost:10880` |
+| `zun.rpc.server-port` | Provider 监听端口 | `10880` |
+| `zun.rpc.server-host` | Provider 地址（Consumer 侧） | `localhost` |
+| `zun.rpc.is-mock` | 是否使用模拟数据（Consumer 侧） | `false` |
+| `zun.rpc.application` | Provider 应用名 | - |
+| `zun.rpc.version` | Provider 版本号 | `1.0` |
+| `zun.rpc.registry.type` | 注册中心类型（`etcd` / `direct`） | - |
+| `zun.rpc.registry.address` | 注册中心地址 | - |
+| `zun.rpc.registry.timeout` | 注册中心超时时间（毫秒） | `10000` |
 
 ## 自定义扩展
 
-框架各核心组件均支持替换默认实现。只需在项目中定义一个 `@Bean`，框架会优先使用你提供的实现：
+框架各核心组件均通过 `@Bean` + `@ConditionalOnMissingBean` 注册，只需在项目中定义同类型的 `@Bean` 即可覆盖默认实现：
 
 ```java
 @Configuration
 public class MyRpcConfig {
 
+    // 替换默认的 JDK 序列化器为 Kryo
     @Bean
     public Serializer serializer() {
-        return new MyCustomSerializer();
+        return new KryoSerializer();
     }
 
+    // 替换默认的直连注册中心为 Etcd
     @Bean
     public Registry registry() {
-        return new MyCustomRegistry();
+        return new EtcdRegistry();
+    }
+
+    // 替换默认的轮询负载均衡为随机
+    @Bean
+    public LoadBalancer loadBalancer() {
+        return new RandomLoadBalancer();
+    }
+
+    // 替换默认的不重试为固定间隔重试
+    @Bean
+    public RetryStrategy retryStrategy() {
+        return new FixedIntervalRetryStrategy();
+    }
+
+    // 替换默认的快速失败为失败自动切换
+    @Bean
+    public ToleranceStrategy toleranceStrategy() {
+        return new FailOverToleranceStrategy();
     }
 }
 ```
 
-支持替换的组件：
+支持替换的组件及默认值：
 
-- `Serializer` — 序列化器
-- `Registry` — 注册中心
-- `LoadBalancer` — 负载均衡器
-- `RetryStrategy` — 重试策略
-- `ToleranceStrategy` — 容错策略
+| 组件 | 接口 | 默认实现 |
+|------|------|----------|
+| 序列化器 | `Serializer` | `JdkSerializer` |
+| 注册中心 | `Registry` | `DirectRegistry` |
+| 负载均衡器 | `LoadBalancer` | `RoundRobinLoadBalancer` |
+| 重试策略 | `RetryStrategy` | `NoRetryStrategy` |
+| 容错策略 | `ToleranceStrategy` | `FailFastToleranceStrategy` |
+
+自定义序列化器时，需要实现 `Serializer` 接口并返回对应的 `SerializerEnums` 类型标识，用于协议头的序列化器标记：
+
+```java
+public class MyCustomSerializer implements Serializer {
+
+    @Override
+    public SerializerEnums getType() {
+        return SerializerEnums.KRYO;  // 复用已有枚举或自定义
+    }
+
+    @Override
+    public <T> byte[] serialize(T object) throws IOException {
+        // ...
+    }
+
+    @Override
+    public <T> T deserialize(byte[] bytes, Class<T> type) throws IOException {
+        // ...
+    }
+}
+```
+
+## 序列化方式对比
+
+| 序列化器 | 跨语言 | 性能 | 体积 | 安全性 | 适用场景 |
+|----------|--------|------|------|--------|----------|
+| **JDK** | 仅 Java | 慢 | 大 | 低（存在反序列化漏洞） | 快速验证、无需额外依赖 |
+| **Kryo** | 仅 Java | 快 | 小 | 中（需关闭注册限制） | Java 纯内网高性能场景 |
+| **JSON** (Jackson) | 支持 | 中 | 大 | 高（纯文本可审计） | 跨语言、调试友好、需要可读性 |
+| **Hessian** | 支持 | 中 | 中 | 中 | 跨语言、二进制但可读 |
 
 ## 技术栈
 

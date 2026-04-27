@@ -61,7 +61,6 @@
                 <version>${spring-boot.version}</version>
                 <configuration>
                     <mainClass>com.zunf.examplespringbootprovider.ExampleSpringBootProviderApplication</mainClass>
-                    <skip>true</skip>
                 </configuration>
                 <executions>
                     <execution>

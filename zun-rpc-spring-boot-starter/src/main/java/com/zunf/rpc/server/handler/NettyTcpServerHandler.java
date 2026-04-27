@@ -1,12 +1,11 @@
 package com.zunf.rpc.server.handler;
 
-import com.zunf.rpc.config.RpcConfig;
 import com.zunf.rpc.enums.MessageStatusEnums;
 import com.zunf.rpc.enums.MessageTypeEnums;
-import com.zunf.rpc.enums.SerializerEnums;
 import com.zunf.rpc.model.RpcRequest;
 import com.zunf.rpc.model.RpcResponse;
 import com.zunf.rpc.protocol.ProtocolMessage;
+import com.zunf.rpc.serializer.Serializer;
 import com.zunf.rpc.server.LocalRegistry;
 import com.zunf.rpc.utils.SpringContextUtil;
 import io.netty.channel.ChannelHandlerContext;
@@ -32,12 +31,8 @@ public class NettyTcpServerHandler extends SimpleChannelInboundHandler<ProtocolM
         ProtocolMessage.Header responseHeader = new ProtocolMessage.Header();
         responseHeader.setRequestId(requestHeader.getRequestId());
 
-        SerializerEnums serializerEnums = SerializerEnums.of(
-                SpringContextUtil.getBean(RpcConfig.class).getSerializer());
-        if (serializerEnums == null) {
-            throw new RuntimeException("序列化器不存在");
-        }
-        responseHeader.setSerializer((byte) serializerEnums.getType());
+        Serializer serializer = SpringContextUtil.getBean(Serializer.class);
+        responseHeader.setSerializer((byte) serializer.getType().getType());
         responseHeader.setType((byte) MessageTypeEnums.RESPONSE.getType());
 
         ProtocolMessage<RpcResponse> protocolMessage;

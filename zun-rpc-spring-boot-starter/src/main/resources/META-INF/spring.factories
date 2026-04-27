@@ -1,4 +1,2 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-  com.zunf.rpc.config.RpcConfig,\
-  com.zunf.rpc.config.RegistryConfig,\
   com.zunf.rpc.config.ZunRpcAutoConfiguration
